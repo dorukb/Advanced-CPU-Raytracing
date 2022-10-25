@@ -6,6 +6,12 @@
 
 namespace parser
 {
+    enum MaterialType{
+        Mirror,
+        Dielectric,
+        Conductor,
+        Default
+    };
     //Notice that all the structures are as simple as possible
     //so that you are not enforced to adopt any style or design.
     struct Vec3f
@@ -49,12 +55,13 @@ namespace parser
 
     struct Material
     {
-        bool is_mirror;
+        MaterialType type;
         Vec3f ambient;
         Vec3f diffuse;
         Vec3f specular;
         Vec3f mirror;
         float phong_exponent;
+        float refractiveIndex;
     };
 
     struct Face

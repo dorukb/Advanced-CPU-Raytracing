@@ -19,6 +19,7 @@ namespace DorkTracer
         Vec3f origin;
         Vec3f dir;
         HitInfo hitInfo;
+        float refractiveIndexOfCurrentMedium;
     };
 
     class Raytracer
@@ -45,6 +46,10 @@ namespace DorkTracer
         bool IsBackface(Face& face, Vec3f& rayDir);
         Vec3f PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth);
         Vec3f ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& normal, Vec3f& intersectionPoint, int recursionDepth);
+        Vec3f ComputeDielectricFresnelReflectionAndRefraction(Material& mat, Vec3f x, Vec3f& w_o, Vec3f& normal, float n1, float n2, int recDepth);
+        Vec3f Reflect(Vec3f& normal, Vec3f& w_o);
+
+
     };
 }
 

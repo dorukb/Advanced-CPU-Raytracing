@@ -117,7 +117,18 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     Material material;
     while (element)
     {
-        material.is_mirror = (element->Attribute("type", "mirror") != NULL);
+        if((element->Attribute("type", "mirror") != NULL)){
+            material.type = Mirror;
+        }
+        else if((element->Attribute("type", "dielectric") != NULL)){
+            material.type = Dielectric;
+        }
+        else if((element->Attribute("type", "conductor") != NULL)){
+            material.type = Conductor;
+        }
+        else{
+            material.type = Default;
+        }
 
         child = element->FirstChildElement("AmbientReflectance");
         if( child != NULL){
@@ -147,6 +158,16 @@ void parser::Scene::loadFromXml(const std::string &filepath)
             material.mirror.x = material.mirror.y = material.mirror.z = 0.0f;
         }
 
+        child = element->FirstChildElement("RefractionIndex");
+        if( child != NULL){
+            // cout <<"has mirror reflectance??"<<endl;
+            stream << child->GetText() << std::endl;
+            stream >> material.refractiveIndex;
+        }else
+        {
+            material.refractiveIndex = 1.0f;
+        }
+        
         child = element->FirstChildElement("PhongExponent");
         if( child != NULL)
         {

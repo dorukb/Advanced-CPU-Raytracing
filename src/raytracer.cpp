@@ -1,4 +1,5 @@
 #include "raytracer.hpp"
+#include <iostream>
 
 using namespace parser;
 using namespace DorkTracer;
@@ -21,6 +22,7 @@ Vec3i Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
     
     if(ray.hitInfo.hasHit)
     {
+
        return clamp(PerformShading(ray, cam.position, scene.max_recursion_depth));
     }
     else return scene.background_color;
@@ -54,11 +56,146 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
 
     }        
 
-    if(material.is_mirror){
+    if (material.type == Default)
+    {   // we are done with shading, default/standard only have Diffuse Specular and Ambient components.
+        return color; 
+    }
+    else if(material.type == Mirror)
+    {
         // Compute radiance along the ideal reflection ray
         color = color + ComputeMirrorReflection(material.mirror, w_out, ray.hitInfo.normal, intersectionPoint, recursionDepth);
     }
-    return color;
+    else if(material.type == Dielectric)
+    {
+        // Both reflection & transmission
+        float n1 = ray.refractiveIndexOfCurrentMedium;
+        color = color + ComputeDielectricFresnelReflectionAndRefraction(material, intersectionPoint, w_out, ray.hitInfo.normal, n1, material.refractiveIndex, recursionDepth);
+    }
+    else if(material.type == Conductor)
+    {
+        // Reflection & absorption, no tranmission.
+    }
+}
+
+// Vec3f Raytracer::Refract(Vec3f &w_i, Vec3f& normal,  Vec3f& n1, Vec3f& n2)
+// {
+
+//     Vec3f w_t = 
+// }
+
+// Ratio of reflected over refracted light amount, for dielectric - dielectric interfacing.
+// cosTheta = dot(w_i, normal)
+// n1: refractive index of the medium incoming ray is currently in
+// n2: refractive index of the medium ray is entering, or equivalently that it will be transmitted in.
+// float GetFresnelReflectionRatioDielectric(Vec3f& w_i, Vec3f& normal, float n1, float n2)
+
+Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, Vec3f x, Vec3f& w_o, Vec3f& normal, float n1, float n2, int recDepth)
+{
+    Vec3f w_i = -w_o;
+    float cosTheta = -dot(w_i, normal);
+    bool isEntering = cosTheta > 0.f;
+    float raysN = n1;
+    float objN = n2;
+
+    if(!isEntering){
+        std::cout << "was not entering??"<<std::endl;
+        // swap indices for correctness.
+        float tmp = n1;
+        n1 = n2;
+        n2 = tmp;
+        cosTheta = abs(cosTheta);
+    }
+    // compute cosPhi, refracted/transmitted angle. formula on pg.14 of slides.
+    float r = n1/n2;
+    float sinThetaSqr = 1 - (cosTheta*cosTheta);
+    float criticalTerm = r*r*sinThetaSqr;
+    if(criticalTerm > 1)
+    {
+        // then inside of square root is negative, total internal reflection case.
+        // perform reflection only, Fr = 1, Ft = 0.
+        Vec3f w_r =  Reflect(normal, w_o);
+
+        // Do reflection?
+        Ray ray;
+        ray.origin = x + normal * scene.shadow_ray_epsilon;
+        ray.dir = w_r;
+        ray.hitInfo.hasHit = false;
+        ray.hitInfo.minT = 999999;
+        ray.refractiveIndexOfCurrentMedium = raysN; // it didnt change medium, reflected back into the one its coming from.
+
+        IntersectObjects(ray);
+        if(ray.hitInfo.hasHit)
+        {
+            return PerformShading(ray, ray.origin, recDepth-1);
+        }
+        else return Vec3f{0,0,0};
+    }
+    else
+    {
+        // both reflection and refraction, perform both, find out the ratio too.
+        float cosPhi = sqrt(1-criticalTerm);
+        float n2cosTheta= n2*cosTheta;
+        float n1cosPhi = n1*cosPhi;
+
+        float rparallel = (n2cosTheta - n1cosPhi) / (n2cosTheta + n1cosPhi);
+        float rperp = (n1*cosTheta - n2*cosPhi) / (n1*cosTheta + n2*cosPhi);
+        float rReflect = (rparallel * rparallel + rperp * rperp) / 2;
+        float rRefract = 1 - rReflect;
+
+       Vec3f reflectedRaysColor;
+        {
+            Vec3f w_reflected = Reflect(normal, w_o);
+
+            // Again do reflection here
+            Ray ray;
+            ray.origin = x + normal * scene.shadow_ray_epsilon;
+            ray.dir = w_reflected;
+            ray.hitInfo.hasHit = false;
+            ray.hitInfo.minT = 999999;
+            ray.refractiveIndexOfCurrentMedium = raysN; // it didnt change medium, reflected back into the one its coming from.
+
+            IntersectObjects(ray);
+            if(ray.hitInfo.hasHit)
+            {
+                // todo attenuation??
+                reflectedRaysColor = PerformShading(ray, ray.origin, recDepth-1);
+            }
+            else reflectedRaysColor = Vec3f{0,0,0};
+        }
+       
+        // BUT also do refraction, 1 ray split into 2 rays in total.
+        // wt = (d + ncosTheta)(n1/n2) - ncosPhi, page 16 of slides.
+        Vec3f refractedRaysColor;
+        {
+            Vec3f w_refracted = (w_i + normal * cosTheta) * r - normal * cosPhi;
+            
+            Ray ray;
+            ray.origin = x + (-normal) * scene.shadow_ray_epsilon;
+            ray.dir = w_refracted;
+            ray.hitInfo.hasHit = false;
+            ray.hitInfo.minT = 999999;
+            ray.refractiveIndexOfCurrentMedium = objN; // it changed medium, transmitted to other one.
+
+            IntersectObjects(ray);
+            if(ray.hitInfo.hasHit)
+            {
+                // todo attenuation??
+                refractedRaysColor = PerformShading(ray, ray.origin, recDepth-1);
+            }
+            else{
+                std::cout << "refracted ray didnt hit anything? possibly wrong. it should at least hit the same object if its a finite mesh or sphere." << std::endl;
+                refractedRaysColor = Vec3f{0,0,0}; 
+            }
+        }
+        return reflectedRaysColor * rReflect + refractedRaysColor * rRefract;
+    }
+
+
+}
+
+Vec3f Raytracer::Reflect(Vec3f& normal, Vec3f& w_o)
+{
+    return makeUnit((normal * 2.0f * dot(normal, w_o)) - w_o);
 }
 
 Vec3f Raytracer::ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& normal, Vec3f& intersectionPoint, int recursionDepth)
@@ -69,7 +206,7 @@ Vec3f Raytracer::ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& n
     }
     else 
     {
-        Vec3f w_r =  makeUnit((normal * 2.0f * dot(normal, w_o)) - w_o);
+        Vec3f w_r =  Reflect(normal, w_o);
 
         Ray ray;
         ray.origin = intersectionPoint + normal * scene.shadow_ray_epsilon;
@@ -152,6 +289,7 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
 void Raytracer::IntersectObjects(Ray& ray)
 {
     bool bfcEnabled = true;
+    // TODO: BFC should be disabled for refractive materials, they have both "faces" by default.
 
     for(int i = 0; i < scene.meshes.size(); i++){
         Mesh& mesh = scene.meshes[i];
