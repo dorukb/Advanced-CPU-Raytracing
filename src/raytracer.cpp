@@ -74,11 +74,64 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
     else if(mat.type == Conductor)
     {
         // Reflection & absorption, no tranmission.
+        color = color + ComputeConductorFresnelReflection(w_o, ray.hitInfo.normal, intersectionPoint, mat, recursionDepth);
     }
 
     return color;
 }
 
+Vec3f Raytracer::ComputeConductorFresnelReflection(Vec3f& w_o, Vec3f& n, Vec3f intPoint, Material& conductorMat, int recDepth)
+{
+    if(recDepth == 0){
+        return Vec3f{0,0,0}; 
+    }
+
+    Vec3f d = -w_o;
+    float cosTheta = -dot(d, n);
+    float n2 = conductorMat.refractiveIndex;
+    float k2 = conductorMat.conductorAbsorptionIndex;
+
+    // compute common intermediate terms
+    float n2k2 = n2*n2 + k2*k2;
+    float n2cosTheta2 = 2 * n2 * cosTheta;
+    float cosThetaSqr = cosTheta * cosTheta;
+
+    float rs = (n2k2 - n2cosTheta2 + cosThetaSqr) / (n2k2 + n2cosTheta2 + cosThetaSqr);
+    float rp = (n2k2 * cosThetaSqr - n2cosTheta2 + 1) / (n2k2 * cosThetaSqr + n2cosTheta2 + 1);
+
+    float reflectRatio = 0.5 * (rs + rp);
+    // transmit ratio = 0.
+
+    // Cast reflected ray
+    if(reflectRatio > 0.01)
+    {
+        Vec3f reflectedRaysColor;
+        {
+            Vec3f w_reflected = Reflect(n, w_o);
+
+            Ray ray;
+            ray.origin = intPoint + n * scene.shadow_ray_epsilon;
+            ray.dir = makeUnit(w_reflected);
+            ray.hitInfo.hasHit = false;
+            ray.hitInfo.minT = 999999;
+            ray.refractiveIndexOfCurrentMedium = 1.0f;
+
+            IntersectObjects(ray);
+            if(ray.hitInfo.hasHit)
+            {
+                // no attenuation on reflect case, since we are not INSIDE an object?
+                reflectedRaysColor = conductorMat.mirror * PerformShading(ray, ray.origin, recDepth-1);
+            }
+            else reflectedRaysColor = Vec3f{0,0,0};
+        }
+
+        return reflectedRaysColor * reflectRatio;
+    }
+    else{
+        return Vec3f{0,0,0};
+    }
+ 
+}
 // Ratio of reflected over refracted light amount, for dielectric - dielectric interfacing.
 // cosTheta = dot(w_i, normal)
 // n1: refractive index of the medium incoming ray is currently in
@@ -188,13 +241,8 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
             
             if(ray.hitInfo.hasHit)
             {
-                // todo attenuation??
-                // Vec3f newHitPos = ray.origin + ray.dir * ray.hitInfo.minT;
                 float travelledDist = ray.hitInfo.minT;
-                // Vec3f attenuationFactor =   L_0);
-                // refractedRaysColor = attenuationFactor * PerformShading(ray, ray.origin, recDepth-1);
                 refractedRaysColor = BeersLaw(travelledDist, mat.absorptionCoefficient, PerformShading(ray, ray.origin, recDepth-1));
-
             }
             else{
                 // std::cout << "refracted ray didnt hit anything"<< std::endl;

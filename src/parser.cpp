@@ -198,6 +198,16 @@ void parser::Scene::loadFromXml(const std::string &filepath)
             material.absorptionCoefficient = Vec3f{0,0,0};
         }
 
+        child = element->FirstChildElement("AbsorptionIndex");
+        if( child != NULL){
+            std::cout <<"has Absorption Index, so must be a conductor."<<std::endl;
+            stream << child->GetText() << std::endl;
+            stream >> material.conductorAbsorptionIndex;
+        }else
+        {
+            material.conductorAbsorptionIndex = 0.0f;
+        }
+        
         child = element->FirstChildElement("PhongExponent");
         if( child != NULL)
         {

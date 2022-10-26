@@ -49,6 +49,7 @@ namespace DorkTracer
         Vec3f ComputeDielectricFresnelReflectionAndRefraction(Material& mat, Vec3f x, Vec3f& w_o, Vec3f normal, float n1, float n2, int recDepth);
         Vec3f Reflect(Vec3f& normal, Vec3f& w_o);
         Vec3f BeersLaw(float x, Vec3f c, Vec3f L_0);
+        Vec3f ComputeConductorFresnelReflection(Vec3f& w_o, Vec3f& n, Vec3f intPoint, Material& conductorMat, int recDepth);
 
     };
 }
