@@ -34,7 +34,7 @@ namespace DorkTracer
         Vec3i PerPixel(int i, int j, Camera& cam);
         Ray GenerateRay(int i, int j, Camera& cam);
 
-        void IntersectFace(Ray& ray, Face& face, int matId);
+        void IntersectFace(Ray& ray, Face& face, std::vector<Vec3f>& vertices, int matId);
         bool DoesIntersectTriangle(Ray& ray, Vec3f& v0, Vec3f& v1, Vec3f& v2, float& t);
         void IntersectSphere(Ray& r, Sphere& s);
         void IntersectObjects(Ray& ray);
@@ -46,9 +46,9 @@ namespace DorkTracer
         bool IsBackface(Face& face, Vec3f& rayDir);
         Vec3f PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth);
         Vec3f ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& normal, Vec3f& intersectionPoint, int recursionDepth);
-        Vec3f ComputeDielectricFresnelReflectionAndRefraction(Material& mat, Vec3f x, Vec3f& w_o, Vec3f& normal, float n1, float n2, int recDepth);
+        Vec3f ComputeDielectricFresnelReflectionAndRefraction(Material& mat, Vec3f x, Vec3f& w_o, Vec3f normal, float n1, float n2, int recDepth);
         Vec3f Reflect(Vec3f& normal, Vec3f& w_o);
-
+        Vec3f BeersLaw(float x, Vec3f c, Vec3f L_0);
 
     };
 }
