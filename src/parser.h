@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include "happly.h"
 
 namespace parser
 {
@@ -42,6 +43,11 @@ namespace parser
         Vec3f gaze;
         Vec3f up;
         Vec4f near_plane;
+
+        bool isLookAt;
+        Vec3f gazePoint;
+        float fovY;
+
         float near_distance;
         int image_width, image_height;
         std::string image_name;
@@ -55,13 +61,14 @@ namespace parser
 
     struct Material
     {
-        MaterialType type;
         Vec3f ambient;
         Vec3f diffuse;
         Vec3f specular;
         Vec3f mirror;
         float phong_exponent;
+        MaterialType type;
         float refractiveIndex;
+        Vec3f absorptionCoefficient;
     };
 
     struct Face
@@ -74,8 +81,10 @@ namespace parser
 
     struct Mesh
     {
+        bool useOwnVertices;
         int material_id;
         std::vector<Face> faces;
+        std::vector<Vec3f> vertices;
     };
 
     struct Triangle
@@ -108,7 +117,8 @@ namespace parser
 
         //Functions
         void loadFromXml(const std::string &filepath);
-        void computeFaceNormal(Face& face);
+        void computeFaceNormal(Face& face, std::vector<Vec3f>& vertices);
+
     };
 }
 

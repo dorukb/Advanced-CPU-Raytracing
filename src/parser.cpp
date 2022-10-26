@@ -63,14 +63,38 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     Camera camera;
     while (element)
     {
+        camera.isLookAt = element->Attribute("type", "lookAt") != NULL;
+
         auto child = element->FirstChildElement("Position");
         stream << child->GetText() << std::endl;
-        child = element->FirstChildElement("Gaze");
-        stream << child->GetText() << std::endl;
+        stream >> camera.position.x >> camera.position.y >> camera.position.z;
+
+        if(camera.isLookAt){
+            child = element->FirstChildElement("GazePoint");
+            stream << child->GetText() << std::endl;
+            stream >> camera.gazePoint.x >> camera.gazePoint.y >> camera.gazePoint.z;
+
+            child = element->FirstChildElement("FovY");
+            stream << child->GetText() << std::endl;
+            stream >> camera.fovY;
+            camera.near_plane = Vec4f{0,0,0,0};
+            std::cout << "LookAt camera. Using fovY and GazePOint insted of NearPlane&Gaze dir to configure camera. fovY: "<< camera.fovY << std::endl;
+        }
+        else{
+            child = element->FirstChildElement("Gaze");
+            stream << child->GetText() << std::endl;
+            stream >> camera.gaze.x >> camera.gaze.y >> camera.gaze.z;
+
+            child = element->FirstChildElement("NearPlane");
+            stream << child->GetText() << std::endl;
+            stream >> camera.near_plane.x >> camera.near_plane.y >> camera.near_plane.z >> camera.near_plane.w;
+            camera.fovY = 0.0f;
+        }
+
         child = element->FirstChildElement("Up");
         stream << child->GetText() << std::endl;
-        child = element->FirstChildElement("NearPlane");
-        stream << child->GetText() << std::endl;
+        stream >> camera.up.x >> camera.up.y >> camera.up.z;
+
         child = element->FirstChildElement("NearDistance");
         stream << child->GetText() << std::endl;
         child = element->FirstChildElement("ImageResolution");
@@ -78,10 +102,6 @@ void parser::Scene::loadFromXml(const std::string &filepath)
         child = element->FirstChildElement("ImageName");
         stream << child->GetText() << std::endl;
 
-        stream >> camera.position.x >> camera.position.y >> camera.position.z;
-        stream >> camera.gaze.x >> camera.gaze.y >> camera.gaze.z;
-        stream >> camera.up.x >> camera.up.y >> camera.up.z;
-        stream >> camera.near_plane.x >> camera.near_plane.y >> camera.near_plane.z >> camera.near_plane.w;
         stream >> camera.near_distance;
         stream >> camera.image_width >> camera.image_height;
         stream >> camera.image_name;
@@ -117,7 +137,8 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     Material material;
     while (element)
     {
-        if((element->Attribute("type", "mirror") != NULL)){
+        if((element->Attribute("type", "mirror") != NULL))
+        {
             material.type = Mirror;
         }
         else if((element->Attribute("type", "dielectric") != NULL)){
@@ -160,19 +181,31 @@ void parser::Scene::loadFromXml(const std::string &filepath)
 
         child = element->FirstChildElement("RefractionIndex");
         if( child != NULL){
-            // cout <<"has mirror reflectance??"<<endl;
             stream << child->GetText() << std::endl;
             stream >> material.refractiveIndex;
         }else
         {
             material.refractiveIndex = 1.0f;
         }
-        
+
+        child = element->FirstChildElement("AbsorptionCoefficient");
+        if( child != NULL){
+            std::cout <<"has AbsorptionCoefficent"<<std::endl;
+            stream << child->GetText() << std::endl;
+            stream >> material.absorptionCoefficient.x >>  material.absorptionCoefficient.y >> material.absorptionCoefficient.z;
+        }else
+        {
+            material.absorptionCoefficient = Vec3f{0,0,0};
+        }
+
         child = element->FirstChildElement("PhongExponent");
         if( child != NULL)
         {
             stream << child->GetText() << std::endl;
             stream >> material.phong_exponent;
+        }
+        else{
+            material.phong_exponent = 1.0f;
         }
 
 
@@ -202,15 +235,64 @@ void parser::Scene::loadFromXml(const std::string &filepath)
         stream >> mesh.material_id;
 
         child = element->FirstChildElement("Faces");
-        stream << child->GetText() << std::endl;
-        Face face;
-        while (!(stream >> face.v0_id).eof())
-        {
-            stream >> face.v1_id >> face.v2_id;
-            computeFaceNormal(face);
 
-            mesh.faces.push_back(face);
+        
+        if((child->Attribute("plyFile") != NULL))
+        {
+         // <Faces plyFile="ply/dragon_remeshed_fixed.ply" />
+            // Face data is given as plyFile
+            std::cout <<"ply file!!"<<std::endl;
+            
+            std::string filename;
+            stream << child->Attribute("plyFile");
+            stream >> filename;
+            std::cout <<"Filename:"<<filename<<std::endl;
+            // Construct the data object by reading from file
+            happly::PLYData plyIn(child->Attribute("plyFile"));
+
+            // Get mesh-style data from the object
+            mesh.useOwnVertices = true;
+
+            std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
+            for(int i = 0; i < vPos.size(); i++){
+                Vec3f vert { vPos[i][0], vPos[i][1], vPos[i][2]};
+                mesh.vertices.push_back(vert);
+            }
+            vPos.clear();
+
+            std::vector<std::vector<size_t>> fInd = plyIn.getFaceIndices<size_t>();
+            std::cout<<"has: "<<  fInd.size() << " faces."<< std::endl;
+            for(int i = 0; i < fInd.size(); i++){
+
+                Face face;
+                if(fInd[i].size() != 3){
+                    std::cout<<"A face is assumed to have 3 indices. can not parse. index count:" << fInd[i].size() << std::endl;
+                    return;
+                }
+                // ply format is 0 base indexed, whereas rest of our project uses 1-based indexing, so add that offset.
+                face.v0_id = fInd[i][0] + 1;
+                face.v1_id = fInd[i][1] + 1;
+                face.v2_id = fInd[i][2] + 1;
+                computeFaceNormal(face, mesh.vertices);
+                mesh.faces.push_back(face);
+            }
         }
+        else
+        {
+            // regular parsing
+            mesh.useOwnVertices = false;
+
+            stream << child->GetText() << std::endl;
+            Face face;
+            while (!(stream >> face.v0_id).eof())
+            {
+                stream >> face.v1_id >> face.v2_id;
+                computeFaceNormal(face, this->vertex_data);
+
+                mesh.faces.push_back(face);
+            }
+        }
+
         stream.clear();
 
         meshes.push_back(mesh);
@@ -233,15 +315,7 @@ void parser::Scene::loadFromXml(const std::string &filepath)
         stream << child->GetText() << std::endl;
         stream >> triangle.indices.v0_id >> triangle.indices.v1_id >> triangle.indices.v2_id;
 
-        // calculate tri normal 
-        // Vec3f a,b,c,ab,ac;
-        // a = vertex_data[triangle.indices.v0_id -1];
-        // b = vertex_data[triangle.indices.v1_id -1];
-        // c = vertex_data[triangle.indices.v2_id -1];
-        // ab = b - a;
-        // ac = c - a;
-        // triangle.indices.n = makeUnit(cross(ab, ac));
-        computeFaceNormal(triangle.indices);
+        computeFaceNormal(triangle.indices, this->vertex_data);
 
         triangles.push_back(triangle);
         element = element->NextSiblingElement("Triangle");
@@ -270,12 +344,12 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     }
 }
 
-void Scene::computeFaceNormal(Face& face)
+void Scene::computeFaceNormal(Face& face, std::vector<Vec3f>& vertices)
 {
     Vec3f a,b,c,ab,ac;
-    a = vertex_data[face.v0_id -1];
-    b = vertex_data[face.v1_id -1];
-    c = vertex_data[face.v2_id -1];
+    a = vertices[face.v0_id -1];
+    b = vertices[face.v1_id -1];
+    c = vertices[face.v2_id -1];
     ab = b - a;
     ac = c - a;
     face.n = makeUnit(cross(ab, ac));
