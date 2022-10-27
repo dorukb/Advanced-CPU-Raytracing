@@ -33,28 +33,34 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
     Vec3f intersectionPoint = ray.origin + ray.dir * ray.hitInfo.minT;
     // Actually perform shading, depending on Material type.
 
+    Vec3f color{0,0,0};
     Material& mat = scene.materials[ray.hitInfo.matId-1];
-    Vec3f color = GetAmbient(mat.ambient, scene.ambient_light);
     Vec3f w_o = makeUnit(eyePos - intersectionPoint);
+    float refractiveIndexOfVacuum = 1.00001;
+    bool travellingInsideAnObject = ray.refractiveIndexOfCurrentMedium > refractiveIndexOfVacuum;
 
-    // Repeat for each light source.
-    for(int l = 0; l < scene.point_lights.size(); l++)
+    if(!travellingInsideAnObject)
     {
-        // Skip all calculation if in shadow, no color "contribution".
-        PointLight& light = scene.point_lights[l];
-        if(IsInShadow(intersectionPoint, light.position)){
-            continue;
-        }
+        color = color + GetAmbient(mat.ambient, scene.ambient_light);
+        // Repeat for each light source.
+        for(int l = 0; l < scene.point_lights.size(); l++)
+        {
+            // Skip all calculation if in shadow, no color "contribution".
+            PointLight& light = scene.point_lights[l];
+            if(IsInShadow(intersectionPoint, light.position)){
+                continue;
+            }
 
-        Vec3f w_in = makeUnit(light.position - intersectionPoint);
-        
-        float distToLight = len(light.position - intersectionPoint);
-        Vec3f receivedIrradiance = light.intensity / (distToLight * distToLight);
+            Vec3f w_in = makeUnit(light.position - intersectionPoint);
+            
+            float distToLight = len(light.position - intersectionPoint);
+            Vec3f receivedIrradiance = light.intensity / (distToLight * distToLight);
 
-        color = color + GetDiffuse(mat.diffuse, w_in, ray.hitInfo.normal, receivedIrradiance);
-        color = color + GetSpecular(mat.specular, mat.phong_exponent, w_in, w_o, ray.hitInfo.normal, receivedIrradiance);
-
-    }        
+            color = color + GetDiffuse(mat.diffuse, w_in, ray.hitInfo.normal, receivedIrradiance);
+            color = color + GetSpecular(mat.specular, mat.phong_exponent, w_in, w_o, ray.hitInfo.normal, receivedIrradiance);
+        }    
+    }
+ 
 
     if (mat.type == Default)
     {   // we are done with shading, default/standard only have Diffuse Specular and Ambient components.
@@ -76,7 +82,11 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
         // Reflection & absorption, no tranmission.
         color = color + ComputeConductorFresnelReflection(w_o, ray.hitInfo.normal, intersectionPoint, mat, recursionDepth);
     }
-
+    Vec3i c = clamp(color);
+    color.x = c.x;
+    color.y = c.y;
+    color.z = c.z;
+    
     return color;
 }
 
@@ -180,10 +190,16 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
         ray.hitInfo.minT = 999999;
         ray.refractiveIndexOfCurrentMedium = raysN; // it didnt change medium, reflected back into the one its coming from.
 
+        // todo: attenuate if travelling inside an object.
         IntersectObjects(ray);
         if(ray.hitInfo.hasHit)
         {
-            return PerformShading(ray, ray.origin, recDepth-1);
+            if(ray.refractiveIndexOfCurrentMedium > 1.00001f)
+            {
+                // non-vacuum, attenuate
+                return BeersLaw(ray.hitInfo.minT, mat.absorptionCoefficient, PerformShading(ray, ray.origin, recDepth-1));
+            }
+            else return PerformShading(ray, ray.origin, recDepth-1);
         }
         else return Vec3f{0,0,0};
     }
@@ -206,19 +222,25 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
             // Again do reflection here
             Ray ray;
             ray.origin = x + normal * scene.shadow_ray_epsilon;
-            ray.dir = makeUnit(w_reflected);
+            ray.dir = w_reflected;
             ray.hitInfo.hasHit = false;
             ray.hitInfo.minT = 999999;
             ray.refractiveIndexOfCurrentMedium = raysN; // it didnt change medium, reflected back into the one its coming from.
 
             IntersectObjects(ray);
+            reflectedRaysColor = Vec3f{0,0,0};
+
             if(ray.hitInfo.hasHit)
             {
+                reflectedRaysColor = PerformShading(ray, ray.origin, recDepth-1);
                 // no attenuation on reflect case, since we are not INSIDE an object?
                 // what about total internal reflection though?
-                reflectedRaysColor = PerformShading(ray, ray.origin, recDepth-1);
+                if(ray.refractiveIndexOfCurrentMedium > 1.00001f)
+                {
+                    // non-vacuum, attenuate
+                    reflectedRaysColor = BeersLaw(ray.hitInfo.minT, mat.absorptionCoefficient, reflectedRaysColor);
+                }
             }
-            else reflectedRaysColor = Vec3f{0,0,0};
         }
        
         // BUT also do refraction, 1 ray split into 2 rays in total.
@@ -234,19 +256,31 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
             ray.hitInfo.minT = 999999;
             ray.refractiveIndexOfCurrentMedium = objN; // it changed medium, transmitted to other one.
 
-            // Maybe only intersect with current object if its entering.
-            // cuz it has to intersect without leaving if  this is a non-infinite object, or a plane.
+            if(isEntering){
 
-            IntersectObjects(ray);
-            
-            if(ray.hitInfo.hasHit)
-            {
-                float travelledDist = ray.hitInfo.minT;
-                refractedRaysColor = BeersLaw(travelledDist, mat.absorptionCoefficient, PerformShading(ray, ray.origin, recDepth-1));
+            ray.refractiveIndexOfCurrentMedium = objN; // it changed medium, transmitted to other one.
             }
             else{
-                // std::cout << "refracted ray didnt hit anything"<< std::endl;
-                refractedRaysColor = Vec3f{0,0,0}; 
+
+            ray.refractiveIndexOfCurrentMedium = 1.0f; // it changed medium, transmitted to other one.
+            }
+            // Maybe only intersect with current object if its entering.
+            // cuz it has to intersect without leaving if  this is a non-infinite object, or a plane.
+            
+            IntersectObjects(ray);
+            refractedRaysColor = Vec3f{0,0,0};
+
+            if(ray.hitInfo.hasHit)
+            {
+                refractedRaysColor = PerformShading(ray, ray.origin, recDepth-1);
+                if(ray.refractiveIndexOfCurrentMedium > 1.001f)
+                {
+                    // non-vacuum, attenuate
+                    refractedRaysColor = BeersLaw(ray.hitInfo.minT, mat.absorptionCoefficient, refractedRaysColor);
+                }
+                else{
+
+                }
             }
         }
         return reflectedRaysColor * rReflect + refractedRaysColor * rRefract;
@@ -281,7 +315,8 @@ Vec3f Raytracer::ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& n
         ray.dir = w_r;
         ray.hitInfo.hasHit = false;
         ray.hitInfo.minT = 999999;
-        
+        ray.refractiveIndexOfCurrentMedium = 1.0f;
+
         IntersectObjects(ray);
         if(ray.hitInfo.hasHit)
         {
@@ -526,6 +561,17 @@ Ray  Raytracer::GenerateRay(int i, int j, Camera& cam)
         right = cam.near_plane.y;
         bottom = cam.near_plane.z;
         top = cam.near_plane.w;
+
+        cam.gaze = makeUnit(cam.gaze);
+        cam.up = makeUnit(cam.up);
+
+        // make sure cam.up is orthogonal to cam.gaze.
+        // u = gaze, v = up, v' = new up.
+        float dotvu = dot(cam.up, cam.gaze);
+        float gazeSqr = dot(cam.gaze, cam.gaze);
+        Vec3f proj = cam.gaze * (dotvu / gazeSqr);
+        Vec3f orthogonalUp = cam.up - proj;
+        cam.up = orthogonalUp;
     }
 
     su = (i + 0.5) * (right - left) / nx;

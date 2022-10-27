@@ -69,6 +69,7 @@ namespace parser
         MaterialType type;
         float refractiveIndex;
         Vec3f absorptionCoefficient;
+        float conductorAbsorptionIndex;
     };
 
     struct Face
