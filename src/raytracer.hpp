@@ -3,8 +3,9 @@
 
 #pragma once
 
-#include "helperMath.h"
-
+#include "camera.hpp"
+#include "parser.h"
+using namespace parser;
 
 namespace DorkTracer
 {

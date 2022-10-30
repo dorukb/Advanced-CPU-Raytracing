@@ -1,6 +1,7 @@
 #include "helperMath.h"
+#include <algorithm>
 
-using namespace parser;
+// using namespace parser;
 
 Vec3f operator+(const Vec3f& v1, const Vec3f& v2){
     Vec3f result;

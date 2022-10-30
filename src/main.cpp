@@ -20,8 +20,8 @@ int main(int argc, char* argv[])
     // TODO loop over all cameras.
     int camIndex = 0;
 
-    Camera& cam = scene.cameras[camIndex];
-    int width = cam.image_width, height = cam.image_height;
+    DorkTracer::Camera& cam = scene.cameras[camIndex];
+    int width = cam.imageWidth, height = cam.imageHeight;
     unsigned char* image = new unsigned char [width * height * 3];
 
     for (int y = 0; y < height; ++y)
@@ -34,7 +34,7 @@ int main(int argc, char* argv[])
             image[i++] = color.z;
         }
     }
-    stbi_write_png(cam.image_name.c_str(), width, height, 3, image, width * 3);
+    stbi_write_png(cam.imageName.c_str(), width, height, 3, image, width * 3);
 
     
     auto end = std::chrono::steady_clock::now();

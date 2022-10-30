@@ -2,7 +2,6 @@
 #include "tinyxml2.h"
 #include <sstream>
 #include <stdexcept>
-#include "helperMath.h"
 
 void parser::Scene::loadFromXml(const std::string &filepath)
 {
@@ -60,52 +59,62 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     //Get Cameras
     element = root->FirstChildElement("Cameras");
     element = element->FirstChildElement("Camera");
-    Camera camera;
+    DorkTracer::Camera camera;
+
     while (element)
     {
-        camera.isLookAt = element->Attribute("type", "lookAt") != NULL;
+        bool isLookAt = element->Attribute("type", "lookAt") != NULL;
+        Vec3f camPos, upDir;
+        float nearDist, width, height;
+        std::string imageName;
 
         auto child = element->FirstChildElement("Position");
         stream << child->GetText() << std::endl;
-        stream >> camera.position.x >> camera.position.y >> camera.position.z;
-
-        if(camera.isLookAt){
-            child = element->FirstChildElement("GazePoint");
-            stream << child->GetText() << std::endl;
-            stream >> camera.gazePoint.x >> camera.gazePoint.y >> camera.gazePoint.z;
-
-            child = element->FirstChildElement("FovY");
-            stream << child->GetText() << std::endl;
-            stream >> camera.fovY;
-            camera.near_plane = Vec4f{0,0,0,0};
-            std::cout << "LookAt camera. Using fovY and GazePOint insted of NearPlane&Gaze dir to configure camera. fovY: "<< camera.fovY << std::endl;
-        }
-        else{
-            child = element->FirstChildElement("Gaze");
-            stream << child->GetText() << std::endl;
-            stream >> camera.gaze.x >> camera.gaze.y >> camera.gaze.z;
-
-            child = element->FirstChildElement("NearPlane");
-            stream << child->GetText() << std::endl;
-            stream >> camera.near_plane.x >> camera.near_plane.y >> camera.near_plane.z >> camera.near_plane.w;
-            camera.fovY = 0.0f;
-        }
+        stream >> camPos.x >> camPos.y >> camPos.z;
 
         child = element->FirstChildElement("Up");
         stream << child->GetText() << std::endl;
-        stream >> camera.up.x >> camera.up.y >> camera.up.z;
+        stream >> upDir.x >> upDir.y >> upDir.z;
 
         child = element->FirstChildElement("NearDistance");
         stream << child->GetText() << std::endl;
+        stream >> nearDist;
+
         child = element->FirstChildElement("ImageResolution");
         stream << child->GetText() << std::endl;
+        stream >> width >> height;
+
         child = element->FirstChildElement("ImageName");
         stream << child->GetText() << std::endl;
+        stream >> imageName;
 
-        stream >> camera.near_distance;
-        stream >> camera.image_width >> camera.image_height;
-        stream >> camera.image_name;
+        if(isLookAt){
 
+            Vec3f gazePoint;
+            float fovY;
+
+            child = element->FirstChildElement("GazePoint");
+            stream << child->GetText() << std::endl;
+            stream >> gazePoint.x >> gazePoint.y >> gazePoint.z;
+
+            child = element->FirstChildElement("FovY");
+            stream << child->GetText() << std::endl;
+            stream >> fovY;
+            camera.SetupLookAt(camPos, gazePoint, upDir, nearDist, fovY, width, height, imageName);
+        }
+        else{
+            Vec3f gazeDir;
+            Vec4f nearPlane;
+
+            child = element->FirstChildElement("Gaze");
+            stream << child->GetText() << std::endl;
+            stream >> gazeDir.x >> gazeDir.y >> gazeDir.z;
+
+            child = element->FirstChildElement("NearPlane");
+            stream << child->GetText() << std::endl;
+            stream >> nearPlane.x >> nearPlane.y >> nearPlane.z >> nearPlane.w;
+            camera.SetupDefault(camPos, gazeDir, upDir, nearPlane, nearDist, width, height, imageName);
+        }
         cameras.push_back(camera);
         element = element->NextSiblingElement("Camera");
     }
@@ -270,7 +279,7 @@ void parser::Scene::loadFromXml(const std::string &filepath)
             }
             vPos.clear();
 
-            std::vector<std::vector<size_t>> fInd = plyIn.getFaceIndices<size_t>();
+            std::vector<std::vector<int>> fInd = plyIn.getFaceIndices<int>();
             std::cout<<"has: "<<  fInd.size() << " faces."<< std::endl;
             for(int i = 0; i < fInd.size(); i++){
 
@@ -354,7 +363,7 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     }
 }
 
-void Scene::computeFaceNormal(Face& face, std::vector<Vec3f>& vertices)
+void parser::Scene::computeFaceNormal(Face& face, std::vector<Vec3f>& vertices)
 {
     Vec3f a,b,c,ab,ac;
     a = vertices[face.v0_id -1];

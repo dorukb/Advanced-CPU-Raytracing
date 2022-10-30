@@ -1,10 +1,29 @@
 #ifndef __helperMath_h__
 #define __helperMath_h__
 
-#include "parser.h"
 #include <math.h>
-using namespace parser;
 
+struct Vec3f
+{
+    float x, y, z;
+    Vec3f operator-() const {
+        Vec3f result;
+        result.x = x * -1.0f;
+        result.y = y * -1.0f;
+        result.z = z * -1.0f;
+        return result;
+    }
+};
+
+struct Vec3i
+{
+    int x, y, z;
+};
+
+struct Vec4f
+{
+    float x, y, z, w;
+};
 Vec3f cross(const Vec3f &first, const Vec3f &second);
 float dot(const Vec3f &a, const Vec3f &b);
 

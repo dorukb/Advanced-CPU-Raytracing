@@ -22,7 +22,6 @@ Vec3i Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
     
     if(ray.hitInfo.hasHit)
     {
-
        return clamp(PerformShading(ray, cam.position, scene.max_recursion_depth));
     }
     else return scene.background_color;
@@ -398,12 +397,19 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
 }
 void Raytracer::IntersectObjects(Ray& ray)
 {
-    bool bfcEnabled = false;
+    bool bfcEnabled = true;
     // TODO: BFC should be disabled for refractive materials, they have both "faces" by default.
 
     for(int i = 0; i < scene.meshes.size(); i++){
         Mesh& mesh = scene.meshes[i];
+        Material& mat = scene.materials[mesh.material_id];
+        if(mat.type == Dielectric){
+            bfcEnabled = false;
+        }
+
         for(int j = 0; j < mesh.faces.size(); j++){
+            
+
             if(bfcEnabled && IsBackface(mesh.faces[j], ray.dir)){
                 continue;
             }
@@ -536,65 +542,13 @@ void Raytracer::IntersectSphere(Ray& r, Sphere& s)
 Ray  Raytracer::GenerateRay(int i, int j, Camera& cam)
 {
     Ray ray;
-    float su, sv;
-    Vec3f m, q, s;
+    Vec3f imagePlanePos = cam.GetImagePlanePosition(i,j);
 
-    // NearPlane: coords of image plane with Left, Right, Bottom, Top floats respectively.
-    float left,right,bottom,top;
-    float nx = cam.image_width;
-    float ny = cam.image_height;
-    float dist = cam.near_distance;
-
-    if(cam.isLookAt){
-        float aspect = nx/ny;
-        
-        top = dist * std::tan((cam.fovY *(M_PI / 180.0f) / 2.0f));
-        right = top * aspect;
-
-        bottom = -top;
-        left = -right;
-
-        cam.gaze = makeUnit(cam.gazePoint - cam.position);
-    }
-    else{
-        left = cam.near_plane.x;
-        right = cam.near_plane.y;
-        bottom = cam.near_plane.z;
-        top = cam.near_plane.w;
-
-        cam.gaze = makeUnit(cam.gaze);
-        cam.up = makeUnit(cam.up);
-
-        // make sure cam.up is orthogonal to cam.gaze.
-        // u = gaze, v = up, v' = new up.
-        float dotvu = dot(cam.up, cam.gaze);
-        float gazeSqr = dot(cam.gaze, cam.gaze);
-        Vec3f proj = cam.gaze * (dotvu / gazeSqr);
-        Vec3f orthogonalUp = cam.up - proj;
-        cam.up = orthogonalUp;
-    }
-
-    su = (i + 0.5) * (right - left) / nx;
-    sv = (j + 0.5) * (top - bottom) / ny;
-
-    Vec3f e = cam.position;
-
-    // Up = v,  Gaze = −w, u = v ×w
-    Vec3f v = cam.up;
-    Vec3f w = -cam.gaze;
-
-    Vec3f u = cross(v, w);
-
-    m = e + cam.gaze * dist;
-    q = m + u * left+ v * top;
-    s = q + u * su + v *-sv;
-
-    ray.origin = e;
-    ray.dir = makeUnit(s - e);
+    ray.origin = cam.position;
+    ray.dir = makeUnit(imagePlanePos - ray.origin);
     
     ray.hitInfo.hasHit = false;
     ray.hitInfo.minT = 99999999;
     ray.refractiveIndexOfCurrentMedium = 1.0f;
     return ray;
-
 }
