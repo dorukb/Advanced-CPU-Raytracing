@@ -1,110 +1,92 @@
 <Scene>
+    <MaxRecursionDepth>6</MaxRecursionDepth>
+
     <BackgroundColor>0 0 0</BackgroundColor>
-    <ShadowRayEpsilon>1e-3</ShadowRayEpsilon>
-    <IntersectionTestEpsilon>1e-6</IntersectionTestEpsilon>
 
     <Cameras>
         <Camera id="1">
-            <Position> 0 2.5 0 </Position>
-            <Gaze> 0 -0.2 -1 </Gaze> <!-- Watch out: make the uvw vectors orthonormal -->
-            <Up> 0 1 0 </Up>
-            <NearPlane> -1 1 -1 1</NearPlane>
-            <NearDistance>10</NearDistance>
-            <ImageResolution> 720 720 </ImageResolution>
-            <ImageName> spheres.png </ImageName>
+            <Position>0 5 25</Position>
+            <Gaze>0 0 -1</Gaze>
+            <Up>0 1 0</Up>
+            <NearPlane>-1 1 -1 1</NearPlane>
+            <NearDistance>1</NearDistance>
+            <ImageResolution>800 800</ImageResolution>
+            <ImageName>spheres.png</ImageName>
         </Camera>
     </Cameras>
 
     <Lights>
-        <AmbientLight> 25 25 25 </AmbientLight>
+        <AmbientLight>25 25 25</AmbientLight>
         <PointLight id="1">
-            <Position> -4 4 -13  </Position>
-            <Intensity> 8550 8550 8550 </Intensity> 
-        </PointLight>
-        <PointLight id="2">
-            <Position> 4 4 -13  </Position>
-            <Intensity> 8550 8550 8550 </Intensity> 
+            <Position>0 30 50</Position>
+            <Intensity>1000000 1000000 1000000</Intensity>
         </PointLight>
     </Lights>
 
     <Materials>
         <Material id="1">
-            <AmbientReflectance> 1 1 1 </AmbientReflectance>
-            <DiffuseReflectance> 1 1 1 </DiffuseReflectance>
-            <SpecularReflectance> 1 1 1 </SpecularReflectance>
-            <PhongExponent>100</PhongExponent>
-        </Material>	
+            <AmbientReflectance>1 1 1</AmbientReflectance>
+            <DiffuseReflectance>1 1 1</DiffuseReflectance>
+            <SpecularReflectance>1 1 1</SpecularReflectance>
+            <PhongExponent>1</PhongExponent>
+        </Material>
         <Material id="2">
-            <AmbientReflectance> 1 1 1 </AmbientReflectance>
-            <DiffuseReflectance> 1 0 0 </DiffuseReflectance>
-            <SpecularReflectance> 1 1 1 </SpecularReflectance>
+            <AmbientReflectance>1 1 1</AmbientReflectance>
+            <DiffuseReflectance>1 0 0</DiffuseReflectance>
+            <SpecularReflectance>1 1 1</SpecularReflectance>
             <PhongExponent>100</PhongExponent>
-        </Material>	
-        <Material id="3">
-            <AmbientReflectance> 1 1 1 </AmbientReflectance>
-            <DiffuseReflectance> 0 1 0 </DiffuseReflectance>
-            <SpecularReflectance> 1 1 1 </SpecularReflectance>
-            <PhongExponent>100</PhongExponent>
-        </Material>	
-        <Material id="4">
-            <AmbientReflectance> 1 1 1 </AmbientReflectance>
-            <DiffuseReflectance> 0.2 0.2 0.2 </DiffuseReflectance>
-            <SpecularReflectance> 0 0 0 </SpecularReflectance>
-            <PhongExponent>1</PhongExponent>
-        </Material>	
-        <Material id="5">
-            <AmbientReflectance> 1 1 1 </AmbientReflectance>
-            <DiffuseReflectance> 0.1 0.9 0.9 </DiffuseReflectance>
-            <SpecularReflectance> 0 0 0 </SpecularReflectance>
-            <PhongExponent>1</PhongExponent>
-        </Material>	
+        </Material>
     </Materials>
 
+    <Transformations>
+        <Translation id="1">-10 5 10</Translation>
+        <Translation id="2">0 5 0</Translation>
+        <Translation id="3">15 5 -10</Translation>
+        <Translation id="4">50 5 -40</Translation>
+        <Scaling id="1">5 5 5</Scaling>
+        <Scaling id="2">100 1 100</Scaling>
+    </Transformations>
+
     <VertexData>
-		-10 -0.8 0   
-		10 -0.8 0    
-		-10 -0.8 -100
-		10 -0.8 -100 
-		0 -0.2 -17   
-		0.5 -0.5 -15 
-		1.0 -0.5 -16 
-		-1.0 -0.5 -13
-		-0.2 -0.5 -14
-	</VertexData>
+        -1 0  1
+         1 0  1
+         1 0 -1
+        -1 0 -1 
+         0 0 0
+    </VertexData>
 
     <Objects>
-        <Triangle id="1">
-            <Indices> 1 2 3 </Indices>
-            <Material> 4 </Material>
-        </Triangle>
-        <Triangle id="2">
-            <Indices> 3 2 4 </Indices>
-            <Material> 4 </Material>
-        </Triangle>
+        <Mesh id="1">
+            <Material>1</Material>
+            <Faces>
+                3 1 2
+                1 3 4
+            </Faces>
+            <Transformations>s2</Transformations>
+        </Mesh>
         <Sphere id="1">
-            <Center> 5 </Center>
-            <Radius> 0.6 </Radius>
-            <Material> 2 </Material>
+            <Material>2</Material>
+            <Center>5</Center>
+            <Radius>1</Radius>
+            <Transformations>s1 t1</Transformations>
         </Sphere>
         <Sphere id="2">
-            <Center> 6 </Center>
-            <Radius> 0.3 </Radius>
-            <Material> 5 </Material>
+            <Material>2</Material>
+            <Center>5</Center>
+            <Radius>1</Radius>
+            <Transformations>s1 t2</Transformations>
         </Sphere>
         <Sphere id="3">
-            <Center> 7 </Center>
-            <Radius> 0.3 </Radius>
-            <Material> 3 </Material>
-        </Sphere>		
+            <Material>2</Material>
+            <Center>5</Center>
+            <Radius>1</Radius>
+            <Transformations>s1 t3</Transformations>
+        </Sphere>
         <Sphere id="4">
-            <Center> 8 </Center>
-            <Radius> 0.3 </Radius>
-            <Material> 1 </Material>
-        </Sphere>		
-        <Sphere id="5">
-            <Center> 9 </Center>
-            <Radius> 0.3 </Radius>
-            <Material> 5 </Material>
-        </Sphere>		
+            <Material>2</Material>
+            <Center>5</Center>
+            <Radius>1</Radius>
+            <Transformations>s1 t4</Transformations>
+        </Sphere>
     </Objects>
 </Scene>

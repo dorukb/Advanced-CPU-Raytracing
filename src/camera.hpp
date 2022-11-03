@@ -15,7 +15,6 @@ namespace DorkTracer
             Vec3f gaze;
             Vec3f up;
 
-            // image related ones can be removed.
             float nearDist;
             int imageWidth;
             int imageHeight;
@@ -31,8 +30,6 @@ namespace DorkTracer
 
             void CalculateImagePlaneParams();
             Vec3f GetOrthonormal(Vec3f& toBeTransformed, Vec3f& relative);
-
-
     };
 
 }
