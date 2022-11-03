@@ -1,4 +1,3 @@
-#include "parser.h"
 #include "tinyxml2.h"
 #include <sstream>
 #include <stdexcept>
@@ -251,13 +250,17 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     //Get Meshes
     element = root->FirstChildElement("Objects");
     element = element->FirstChildElement("Mesh");
-    DorkTracer::Mesh mesh;
+
 
     while (element)
     {
+
+        DorkTracer::Mesh mesh(this->vertex_data);
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
         stream >> mesh.material_id;
+
+        mesh.material = &materials[mesh.material_id-1];
 
         child = element->FirstChildElement("Faces");
 
@@ -276,7 +279,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             happly::PLYData plyIn(child->Attribute("plyFile"));
 
             // Get mesh-style data from the object
-            mesh.useOwnVertices = true;
+            // mesh.useOwnVertices = true;
 
             std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
             for(int i = 0; i < vPos.size(); i++){
@@ -305,7 +308,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         else
         {
             // regular parsing
-            mesh.useOwnVertices = false;
+            // mesh.useOwnVertices = false;
 
             stream << child->GetText() << std::endl;
             DorkTracer::Face face;
@@ -319,9 +322,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         }
 
         stream.clear();
-
         meshes.push_back(mesh);
-        mesh.faces.clear();
+        // mesh.faces.clear();
         element = element->NextSiblingElement("Mesh");
     }
     stream.clear();
@@ -332,15 +334,17 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     //Get Triangles, they can be represented with Mesh structure as well.
     element = root->FirstChildElement("Objects");
     element = element->FirstChildElement("Triangle");
-    DorkTracer::Mesh triangle;
     
     // std::shared_ptr<Triangle> p = std::make_shared<Triangle>();
     while (element)
     {
+        DorkTracer::Mesh mesh(this->vertex_data);
+
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
-        stream >> triangle.material_id;
+        stream >> mesh.material_id;
 
+        mesh.material = &materials[mesh.material_id];
         child = element->FirstChildElement("Indices");
         stream << child->GetText() << std::endl;
         // stream >> triangle.indices.v0_id >> triangle.indices.v1_id >> triangle.indices.v2_id;
@@ -349,9 +353,9 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         
         stream >> face.v0_id >> face.v1_id >> face.v2_id;
         computeFaceNormal(face, this->vertex_data);
-        triangle.faces.push_back(face);
+        mesh.faces.push_back(face);
      
-        meshes.push_back(triangle);
+        meshes.push_back(mesh);
         element = element->NextSiblingElement("Triangle");
     }
 
@@ -378,6 +382,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         spheres.push_back(sphere);
         element = element->NextSiblingElement("Sphere");
     }
+
+    std::cout <<"parsing completed" << std::endl;
 }
 
 void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, std::vector<Vec3f>& vertices)

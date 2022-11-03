@@ -1,7 +1,6 @@
 #ifndef __DORKTRACER_MATERIAL__
 #define __DORKTRACER_MATERIAL__
 
-#pragma once
 
 #include "helperMath.h"
 

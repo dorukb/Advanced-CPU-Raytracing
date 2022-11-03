@@ -1,8 +1,6 @@
 #ifndef __DORKTRACER_SCENE__
 #define __DORKTRACER_SCENE__
 
-#pragma once
-
 #include <string>
 #include <vector>
 #include "helperMath.h"

@@ -4,7 +4,6 @@
 #include "helperMath.h"
 #include <string>
 
-#pragma once
 
 namespace DorkTracer
 {

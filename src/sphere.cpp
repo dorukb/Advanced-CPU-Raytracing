@@ -7,7 +7,7 @@ Sphere::Sphere(std::vector<Vec3f>& vertex_data)
     this->vertex_data = vertex_data;
 }
 
-bool DorkTracer::Sphere::intersect(Ray& r){
+void DorkTracer::Sphere::Intersect(Ray& r){
     Vec3f center = this->vertex_data[center_vertex_id - 1];
     Vec3f oc = r.origin - center;
 
@@ -18,7 +18,7 @@ bool DorkTracer::Sphere::intersect(Ray& r){
     float a = dot(r.dir, r.dir);
     float delta = b*b - (4 * a * c);
 
-    if(delta < 0.0) return false;
+    if(delta < 0.0) return;
     else
     {
         delta = sqrtf(delta);
@@ -49,10 +49,10 @@ bool DorkTracer::Sphere::intersect(Ray& r){
             // calculate sphere normal at hit point
             Vec3f hitPoint = r.origin + r.dir * t;
             r.hitInfo.normal = makeUnit(hitPoint - center);
-            return true;
+            return;
         }
         else{
-            return false;
+            return;
         }
     }
 }

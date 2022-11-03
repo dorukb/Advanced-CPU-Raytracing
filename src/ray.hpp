@@ -1,6 +1,5 @@
 #ifndef __DORKTRACER_RAY__
 #define __DORKTRACER_RAY__
-#pragma once
 
 #include "helperMath.h"
 

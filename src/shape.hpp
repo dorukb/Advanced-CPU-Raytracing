@@ -15,15 +15,8 @@ namespace DorkTracer{
     public:
         Shape(){}
 
-        virtual bool intersect(Ray& ray){};
+        virtual void Intersect(Ray&){};
 
-        Material& getMaterial(){
-            return *mat;
-        }
-
-    private:
-
-        Material* mat;
     };
 
     struct Face
