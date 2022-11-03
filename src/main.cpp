@@ -8,7 +8,7 @@
 int main(int argc, char* argv[])
 {
     // Sample usage for reading an XML scene file
-    parser::Scene scene;
+    DorkTracer::Scene scene;
 
     scene.loadFromXml(argv[1]);
 

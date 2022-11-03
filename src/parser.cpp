@@ -2,8 +2,13 @@
 #include "tinyxml2.h"
 #include <sstream>
 #include <stdexcept>
+#include <string>
+#include <vector>
 
-void parser::Scene::loadFromXml(const std::string &filepath)
+#include "happly.h"
+#include "scene.h"
+
+void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 {
     tinyxml2::XMLDocument file;
     std::stringstream stream;
@@ -143,21 +148,21 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     //Get Materials
     element = root->FirstChildElement("Materials");
     element = element->FirstChildElement("Material");
-    Material material;
+    DorkTracer::Material material;
     while (element)
     {
         if((element->Attribute("type", "mirror") != NULL))
         {
-            material.type = Mirror;
+            material.type = DorkTracer::Material::Mirror;
         }
         else if((element->Attribute("type", "dielectric") != NULL)){
-            material.type = Dielectric;
+            material.type = DorkTracer::Material::Dielectric;
         }
         else if((element->Attribute("type", "conductor") != NULL)){
-            material.type = Conductor;
+            material.type = DorkTracer::Material::Conductor;
         }
         else{
-            material.type = Default;
+            material.type = DorkTracer::Material::Default;
         }
 
         child = element->FirstChildElement("AmbientReflectance");
@@ -246,7 +251,8 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     //Get Meshes
     element = root->FirstChildElement("Objects");
     element = element->FirstChildElement("Mesh");
-    Mesh mesh;
+    DorkTracer::Mesh mesh;
+
     while (element)
     {
         child = element->FirstChildElement("Material");
@@ -283,7 +289,7 @@ void parser::Scene::loadFromXml(const std::string &filepath)
             std::cout<<"has: "<<  fInd.size() << " faces."<< std::endl;
             for(int i = 0; i < fInd.size(); i++){
 
-                Face face;
+                DorkTracer::Face face;
                 if(fInd[i].size() != 3){
                     std::cout<<"A face is assumed to have 3 indices. can not parse. index count:" << fInd[i].size() << std::endl;
                     return;
@@ -302,7 +308,7 @@ void parser::Scene::loadFromXml(const std::string &filepath)
             mesh.useOwnVertices = false;
 
             stream << child->GetText() << std::endl;
-            Face face;
+            DorkTracer::Face face;
             while (!(stream >> face.v0_id).eof())
             {
                 stream >> face.v1_id >> face.v2_id;
@@ -320,10 +326,15 @@ void parser::Scene::loadFromXml(const std::string &filepath)
     }
     stream.clear();
 
-    //Get Triangles
+
+// TODO: Read triangles
+
+    //Get Triangles, they can be represented with Mesh structure as well.
     element = root->FirstChildElement("Objects");
     element = element->FirstChildElement("Triangle");
-    Triangle triangle;
+    DorkTracer::Mesh triangle;
+    
+    // std::shared_ptr<Triangle> p = std::make_shared<Triangle>();
     while (element)
     {
         child = element->FirstChildElement("Material");
@@ -332,20 +343,25 @@ void parser::Scene::loadFromXml(const std::string &filepath)
 
         child = element->FirstChildElement("Indices");
         stream << child->GetText() << std::endl;
-        stream >> triangle.indices.v0_id >> triangle.indices.v1_id >> triangle.indices.v2_id;
-
-        computeFaceNormal(triangle.indices, this->vertex_data);
-
-        triangles.push_back(triangle);
+        // stream >> triangle.indices.v0_id >> triangle.indices.v1_id >> triangle.indices.v2_id;
+        
+        DorkTracer::Face face;
+        
+        stream >> face.v0_id >> face.v1_id >> face.v2_id;
+        computeFaceNormal(face, this->vertex_data);
+        triangle.faces.push_back(face);
+     
+        meshes.push_back(triangle);
         element = element->NextSiblingElement("Triangle");
     }
 
     //Get Spheres
     element = root->FirstChildElement("Objects");
     element = element->FirstChildElement("Sphere");
-    Sphere sphere;
     while (element)
-    {
+    {    
+        Sphere sphere(this->vertex_data);
+
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
         stream >> sphere.material_id;
@@ -358,12 +374,13 @@ void parser::Scene::loadFromXml(const std::string &filepath)
         stream << child->GetText() << std::endl;
         stream >> sphere.radius;
 
+        sphere.vertex_data = this->vertex_data;
         spheres.push_back(sphere);
         element = element->NextSiblingElement("Sphere");
     }
 }
 
-void parser::Scene::computeFaceNormal(Face& face, std::vector<Vec3f>& vertices)
+void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
 {
     Vec3f a,b,c,ab,ac;
     a = vertices[face.v0_id -1];

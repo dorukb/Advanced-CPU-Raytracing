@@ -1,7 +1,6 @@
 #include "raytracer.hpp"
 #include <iostream>
 
-using namespace parser;
 using namespace DorkTracer;
 
 Raytracer::Raytracer(Scene& scene){
@@ -61,22 +60,22 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
     }
  
 
-    if (mat.type == Default)
+    if (mat.type == Material::Default)
     {   // we are done with shading, default/standard only have Diffuse Specular and Ambient components.
         return color; 
     }
-    else if(mat.type == Mirror)
+    else if(mat.type == Material::Mirror)
     {
         // Compute radiance along the ideal reflection ray
         color = color + ComputeMirrorReflection(mat.mirror, w_o, ray.hitInfo.normal, intersectionPoint, recursionDepth);
     }
-    else if(mat.type == Dielectric)
+    else if(mat.type == Material::Dielectric)
     {
         // Both reflection & transmission
         float n1 = ray.refractiveIndexOfCurrentMedium;
         color = color + ComputeDielectricFresnelReflectionAndRefraction(mat, intersectionPoint, w_o, ray.hitInfo.normal, n1, mat.refractiveIndex, recursionDepth);
     }
-    else if(mat.type == Conductor)
+    else if(mat.type == Material::Conductor)
     {
         // Reflection & absorption, no tranmission.
         color = color + ComputeConductorFresnelReflection(w_o, ray.hitInfo.normal, intersectionPoint, mat, recursionDepth);
@@ -370,22 +369,10 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
             }
         }
     }
-    
-    // Intersect with all Triangles
-    for(int i = 0; i < scene.triangles.size(); i++){
-        Triangle& tri = scene.triangles[i];
-        IntersectFace(shadowRay, tri.indices, scene.vertex_data, tri.material_id);
-        if(shadowRay.hitInfo.hasHit && shadowRay.hitInfo.minT < lightSourceT)
-        {
-            // valid hit, in shadow.
-            return true;
-        }
-    }
-
     // Intersect with all Spheres
     for(int i = 0; i < scene.spheres.size(); i++){
         Sphere& s = scene.spheres[i];
-        IntersectSphere(shadowRay, s);
+        s.intersect(shadowRay);
         if(shadowRay.hitInfo.hasHit && shadowRay.hitInfo.minT < lightSourceT)
         {
             // valid hit, in shadow.
@@ -403,7 +390,7 @@ void Raytracer::IntersectObjects(Ray& ray)
     for(int i = 0; i < scene.meshes.size(); i++){
         Mesh& mesh = scene.meshes[i];
         Material& mat = scene.materials[mesh.material_id];
-        if(mat.type == Dielectric){
+        if(mat.type == Material::Dielectric){
             bfcEnabled = false;
         }
 
@@ -426,19 +413,19 @@ void Raytracer::IntersectObjects(Ray& ray)
     }
     
     // Intersect with all Triangles
-    for(int i = 0; i < scene.triangles.size(); i++){
-        Triangle& tri = scene.triangles[i];
-        if(bfcEnabled && IsBackface(tri.indices, ray.dir))
-        {
-            continue;
-        }
-        IntersectFace(ray, tri.indices, scene.vertex_data, tri.material_id);
-    }
+    // for(int i = 0; i < scene.triangles.size(); i++){
+    //     Triangle& tri = scene.triangles[i];
+    //     if(bfcEnabled && IsBackface(tri.indices, ray.dir))
+    //     {
+    //         continue;
+    //     }
+    //     IntersectFace(ray, tri.indices, scene.vertex_data, tri.material_id);
+    // }
 
     // Intersect with all Spheres
     for(int i = 0; i < scene.spheres.size(); i++){
         Sphere& s = scene.spheres[i];
-        IntersectSphere(ray, s);
+        s.intersect(ray);
     }
 }
 bool Raytracer::IsBackface(Face& face, Vec3f& rayDir)
@@ -493,52 +480,7 @@ bool Raytracer::DoesIntersectTriangle(Ray& ray, Vec3f& v0, Vec3f& v1, Vec3f& v2,
     t = determinant(matrixT) / detA;
     return t > 0.0f;
 }
-void Raytracer::IntersectSphere(Ray& r, Sphere& s)
-{
-    Vec3f center = scene.vertex_data[s.center_vertex_id - 1];
-    Vec3f oc = r.origin - center;
 
-    float t,t1, t2;
-
-    float c = dot(oc,oc) - (s.radius * s.radius);
-    float b =  2 * dot(r.dir, oc);
-    float a = dot(r.dir, r.dir);
-    float delta = b*b - (4 * a * c);
-
-    if(delta < 0.0) return;
-    else
-    {
-        delta = sqrtf(delta);
-        a = 2.0 * a;
-        float t1 = (-b + delta) / a;
-        float t2 = (-b - delta) / a;
-        t = t1 < t2 ? t1 : t2;
-
-        // Find the minimum t which is > 0.0f
-        if(t1 < t2){
-            if(t1 > 0.0f){
-                t = t1;
-            }
-            else t = t2;
-        }
-        else if(t2 < t1){
-            if(t2 > 0.0f){
-                t = t2;
-            }
-            else t = t1;
-        }
-        // todo: consider ignoring negative t before selecting the min.
-
-        if(t < r.hitInfo.minT && t > 0.0f){
-            r.hitInfo.minT = t;
-            r.hitInfo.matId = s.material_id;
-            r.hitInfo.hasHit = true;
-            // calculate sphere normal at hit point
-            Vec3f hitPoint = r.origin + r.dir * t;
-            r.hitInfo.normal = makeUnit(hitPoint - center);
-        }
-    }
-}
 Ray  Raytracer::GenerateRay(int i, int j, Camera& cam)
 {
     Ray ray;

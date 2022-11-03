@@ -4,31 +4,17 @@
 #pragma once
 
 #include "camera.hpp"
-#include "parser.h"
-using namespace parser;
+#include "mesh.hpp"
+#include "scene.h"
 
 namespace DorkTracer
 {
-    struct HitInfo{
-        bool hasHit;
-        float minT;
-        Vec3f normal;
-        int matId;
-    };
-
-    struct Ray{
-        Vec3f origin;
-        Vec3f dir;
-        HitInfo hitInfo;
-        float refractiveIndexOfCurrentMedium;
-    };
-
     class Raytracer
     {
 
     public:
-        parser::Scene scene;
-        Raytracer(parser::Scene& scene);
+        Scene scene;
+        Raytracer(Scene& scene);
         Vec3i RenderPixel(int i, int j, int camIndex);
 
     private:
@@ -37,7 +23,6 @@ namespace DorkTracer
 
         void IntersectFace(Ray& ray, Face& face, std::vector<Vec3f>& vertices, int matId);
         bool DoesIntersectTriangle(Ray& ray, Vec3f& v0, Vec3f& v1, Vec3f& v2, float& t);
-        void IntersectSphere(Ray& r, Sphere& s);
         void IntersectObjects(Ray& ray);
 
         Vec3f GetAmbient(Vec3f& reflectance, Vec3f& ambientLightColor);
