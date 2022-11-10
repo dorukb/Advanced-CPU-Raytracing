@@ -121,7 +121,7 @@ Vec3f Raytracer::ComputeConductorFresnelReflection(Vec3f& w_o, Vec3f& n, Vec3f i
             ray.origin = intPoint + n * scene.shadow_ray_epsilon;
             ray.dir = makeUnit(w_reflected);
             ray.hitInfo.hasHit = false;
-            ray.hitInfo.minT = 999999;
+            ray.hitInfo.minT = INFINITY;
             ray.refractiveIndexOfCurrentMedium = 1.0f;
 
             IntersectObjects(ray);
@@ -185,7 +185,7 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
         ray.origin = x + normal * scene.shadow_ray_epsilon;
         ray.dir = w_r;
         ray.hitInfo.hasHit = false;
-        ray.hitInfo.minT = 999999;
+        ray.hitInfo.minT = INFINITY;
         ray.refractiveIndexOfCurrentMedium = raysN; // it didnt change medium, reflected back into the one its coming from.
 
         // todo: attenuate if travelling inside an object.
@@ -222,7 +222,7 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
             ray.origin = x + normal * scene.shadow_ray_epsilon;
             ray.dir = w_reflected;
             ray.hitInfo.hasHit = false;
-            ray.hitInfo.minT = 999999;
+            ray.hitInfo.minT = INFINITY;
             ray.refractiveIndexOfCurrentMedium = raysN; // it didnt change medium, reflected back into the one its coming from.
 
             IntersectObjects(ray);
@@ -251,7 +251,7 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
             ray.dir = makeUnit(w_refracted);
             ray.origin = x + (-normal) * scene.shadow_ray_epsilon;
             ray.hitInfo.hasHit = false;
-            ray.hitInfo.minT = 999999;
+            ray.hitInfo.minT = INFINITY;
             ray.refractiveIndexOfCurrentMedium = objN; // it changed medium, transmitted to other one.
 
             if(isEntering){
@@ -312,7 +312,7 @@ Vec3f Raytracer::ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& n
         ray.origin = intersectionPoint + normal * scene.shadow_ray_epsilon;
         ray.dir = w_r;
         ray.hitInfo.hasHit = false;
-        ray.hitInfo.minT = 999999;
+        ray.hitInfo.minT = INFINITY;
         ray.refractiveIndexOfCurrentMedium = 1.0f;
 
         IntersectObjects(ray);
@@ -352,9 +352,9 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
     shadowRay.hitInfo.minT = lightSourceT + 0.1f;
 
     for(int i = 0; i < scene.meshes.size(); i++){
-        Mesh& mesh = scene.meshes[i];
+        Mesh* mesh = scene.meshes[i];
         
-        mesh.Intersect(shadowRay);
+        mesh->Intersect(shadowRay);
 
         if(shadowRay.hitInfo.hasHit && shadowRay.hitInfo.minT < lightSourceT)
         {
@@ -378,8 +378,8 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
 void Raytracer::IntersectObjects(Ray& ray)
 {
     for(int i = 0; i < scene.meshes.size(); i++){
-        Mesh& mesh = scene.meshes[i];
-        mesh.Intersect(ray);
+        Mesh* mesh = scene.meshes[i];
+        mesh->Intersect(ray);
     }
 
     // Intersect with all Spheres
@@ -398,7 +398,7 @@ Ray  Raytracer::GenerateRay(int i, int j, Camera& cam)
     ray.dir = makeUnit(imagePlanePos - ray.origin);
     
     ray.hitInfo.hasHit = false;
-    ray.hitInfo.minT = 99999999;
+    ray.hitInfo.minT = INFINITY;
     ray.refractiveIndexOfCurrentMedium = 1.0f;
     return ray;
 }

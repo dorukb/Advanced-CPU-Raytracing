@@ -6,6 +6,7 @@
 
 #include "happly.h"
 #include "scene.h"
+#include <limits>
 
 void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 {
@@ -255,15 +256,21 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     while (element)
     {
 
-        DorkTracer::Mesh mesh(this->vertex_data);
+        // DorkTracer::Mesh mesh(this->vertex_data);
+
+        DorkTracer::Mesh* mesh = new DorkTracer::Mesh(this->vertex_data);
+
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
-        stream >> mesh.material_id;
+        stream >> mesh->material_id;
 
-        mesh.material = &materials[mesh.material_id-1];
+        mesh->material = &materials[mesh->material_id-1];
 
         child = element->FirstChildElement("Faces");
 
+        BoundingBox bbox;
+        bbox.maxCorner.x = bbox.maxCorner.y = bbox.maxCorner.z = std::numeric_limits<float>::min();
+        bbox.minCorner.x = bbox.minCorner.y = bbox.minCorner.z = std::numeric_limits<float>::max();
         
         if((child->Attribute("plyFile") != NULL))
         {
@@ -284,7 +291,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
             for(int i = 0; i < vPos.size(); i++){
                 Vec3f vert { vPos[i][0], vPos[i][1], vPos[i][2]};
-                mesh.vertices.push_back(vert);
+                mesh->vertices.push_back(vert);
             }
             vPos.clear();
 
@@ -301,8 +308,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 face.v0_id = fInd[i][0] + 1;
                 face.v1_id = fInd[i][1] + 1;
                 face.v2_id = fInd[i][2] + 1;
-                computeFaceNormal(face, mesh.vertices);
-                mesh.faces.push_back(face);
+                computeFaceProperties(face, this->vertex_data);
+                mesh->faces.push_back(face);
             }
         }
         else
@@ -315,13 +322,37 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             while (!(stream >> face.v0_id).eof())
             {
                 stream >> face.v1_id >> face.v2_id;
-                computeFaceNormal(face, this->vertex_data);
+                computeFaceProperties(face, this->vertex_data);
+                
+                // calculate bbox of the owner mesh here, ugly but efficient.
+                if(face.bbox.minCorner.x < bbox.minCorner.x){
+                    bbox.minCorner.x = face.bbox.minCorner.x;
+                }
+                if(face.bbox.minCorner.y < bbox.minCorner.y){
+                    bbox.minCorner.y = face.bbox.minCorner.y;
+                }
+                if(face.bbox.minCorner.z < bbox.minCorner.z){
+                    bbox.minCorner.z = face.bbox.minCorner.z;
+                }
 
-                mesh.faces.push_back(face);
+                if(face.bbox.maxCorner.x > bbox.maxCorner.x){
+                    bbox.maxCorner.x = face.bbox.maxCorner.x;
+                }
+                if(face.bbox.maxCorner.y > bbox.maxCorner.y){
+                    bbox.maxCorner.y = face.bbox.maxCorner.y;
+                }
+                if(face.bbox.maxCorner.z > bbox.maxCorner.z){
+                    bbox.maxCorner.z = face.bbox.maxCorner.z;
+                }
+                mesh->faces.push_back(face);
             }
         }
 
         stream.clear();
+
+        mesh->bbox = bbox;
+        mesh->ConstructBVH();
+
         meshes.push_back(mesh);
         // mesh.faces.clear();
         element = element->NextSiblingElement("Mesh");
@@ -338,13 +369,15 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     // std::shared_ptr<Triangle> p = std::make_shared<Triangle>();
     while (element)
     {
-        DorkTracer::Mesh mesh(this->vertex_data);
+        // DorkTracer::Mesh mesh(this->vertex_data);
+
+        DorkTracer::Mesh* mesh = new DorkTracer::Mesh(this->vertex_data);
 
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
-        stream >> mesh.material_id;
+        stream >> mesh->material_id;
 
-        mesh.material = &materials[mesh.material_id];
+        mesh->material = &materials[mesh->material_id];
         child = element->FirstChildElement("Indices");
         stream << child->GetText() << std::endl;
         // stream >> triangle.indices.v0_id >> triangle.indices.v1_id >> triangle.indices.v2_id;
@@ -352,9 +385,15 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         DorkTracer::Face face;
         
         stream >> face.v0_id >> face.v1_id >> face.v2_id;
-        computeFaceNormal(face, this->vertex_data);
-        mesh.faces.push_back(face);
-     
+
+        // Normal, Centroid and BoundingBox computation per face.
+        computeFaceProperties(face, this->vertex_data);
+        mesh->faces.push_back(face);
+
+        // Has only one face, so the bounding boxes are identical.
+        mesh->bbox = face.bbox;
+        mesh->ConstructBVH();
+
         meshes.push_back(mesh);
         element = element->NextSiblingElement("Triangle");
     }
@@ -386,6 +425,21 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     std::cout <<"parsing completed" << std::endl;
 }
 
+void DorkTracer::Scene::computeFaceProperties(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
+{
+    computeFaceCenter(face, vertices);
+    computeFaceNormal(face, vertices);
+    computeFaceBoundingBox(face, vertices);
+}
+void DorkTracer::Scene::computeFaceCenter(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
+{
+    Vec3f a,b,c,ab,ac;
+    a = vertices[face.v0_id -1];
+    b = vertices[face.v1_id -1];
+    c = vertices[face.v2_id -1];
+    
+    face.center = (a+b+c)/3;
+}
 void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
 {
     Vec3f a,b,c,ab,ac;
@@ -395,4 +449,18 @@ void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, std::vector<Ve
     ab = b - a;
     ac = c - a;
     face.n = makeUnit(cross(ab, ac));
+}
+void DorkTracer::Scene::computeFaceBoundingBox(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
+{
+    Vec3f& a = vertices[face.v0_id -1];
+    Vec3f& b = vertices[face.v1_id -1];
+    Vec3f& c = vertices[face.v2_id -1];
+
+    face.bbox.minCorner.x = std::min(std::min(a.x, b.x), c.x);
+    face.bbox.minCorner.y = std::min(std::min(a.y, b.y), c.y);
+    face.bbox.minCorner.z = std::min(std::min(a.z, b.z), c.z);
+
+    face.bbox.maxCorner.x = std::max(std::max(a.x, b.x), c.x);    
+    face.bbox.maxCorner.y = std::max(std::max(a.y, b.y), c.y);
+    face.bbox.maxCorner.z = std::max(std::max(a.z, b.z), c.z);
 }

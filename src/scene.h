@@ -28,13 +28,15 @@ namespace DorkTracer{
         std::vector<PointLight> point_lights;
         std::vector<Material> materials;
         std::vector<Vec3f> vertex_data;
-        std::vector<Mesh> meshes;
+        std::vector<Mesh*> meshes;
         std::vector<Sphere> spheres;
 
         //Functions
         void loadFromXml(const std::string &filepath);
         void computeFaceNormal(Face& face, std::vector<Vec3f>& vertices);
-
+        void computeFaceBoundingBox(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
+        void computeFaceCenter(Face& face, std::vector<Vec3f>& vertices);
+        void computeFaceProperties(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
     };
 }
 

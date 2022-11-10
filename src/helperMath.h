@@ -2,6 +2,7 @@
 #define __helperMath_h__
 
 #include <math.h>
+#include <stdint.h>
 
 struct Vec3f
 {
@@ -12,6 +13,18 @@ struct Vec3f
         result.y = y * -1.0f;
         result.z = z * -1.0f;
         return result;
+    }
+    float operator[](uint32_t idx) const{
+        switch(idx){
+            case 0:
+                return x;
+            case 1:
+                return y;
+            case 2:
+                return z;
+            _:
+                return x;
+        }
     }
 };
 

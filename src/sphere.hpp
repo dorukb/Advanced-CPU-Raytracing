@@ -17,7 +17,7 @@ namespace DorkTracer
         std::vector<Vec3f> vertex_data;
 
         Sphere(std::vector<Vec3f>& vertex_data);
-        virtual void Intersect(Ray& ray);
+        virtual bool Intersect(Ray& ray);
 
     private:
         
