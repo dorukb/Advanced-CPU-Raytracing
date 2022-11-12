@@ -5,6 +5,7 @@
 #include "ray.hpp"
 #include "material.hpp"
 #include <vector>
+#include "matrix.hpp"
 
 namespace DorkTracer{
 
@@ -12,7 +13,12 @@ namespace DorkTracer{
     {
         
     public:
-        Shape(){}
+        int id;
+        Matrix transform;
+        Matrix inverseTransform;
+        Matrix inverseTransposeTransform;
+
+        Shape() : transform(4,4), inverseTransform(4,4), inverseTransposeTransform(4,4){}
 
         virtual bool Intersect(Ray&){return false;};
 

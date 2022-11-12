@@ -3,10 +3,16 @@
 
 using namespace DorkTracer;
 
-DorkTracer::Mesh::Mesh(std::vector<Vec3f>& vertices){
+DorkTracer::Mesh::Mesh(std::vector<Vec3f>& vertices)
+{
     this->vertices = vertices;
 }
-
+int DorkTracer::Mesh::GetMaterial(){
+    return this->material_id;
+}
+void DorkTracer::Mesh::SetMaterial(int matId){
+    this->material_id = matId;
+}
 
 void DorkTracer::Mesh::ConstructBVH()
 {
@@ -34,8 +40,6 @@ void DorkTracer::Mesh::ConstructBVH()
     // -> Can be done by swapping the elements in the container (e.g. vector)
     
     RecursiveBVHBuild(0);
-
-    std::cout<<"done"<<std::endl;
 }   
 
 void DorkTracer::Mesh::RecursiveBVHBuild(uint32_t nodeIdx)
@@ -147,37 +151,39 @@ void DorkTracer::Mesh::RecomputeBoundingBox(uint32_t nodeIdx)
 
 bool DorkTracer::Mesh::Intersect(Ray& ray)
 {    
-    bool bfcEnabled;   
-    // BFC should be disabled for refractive materials, they have both "faces" by default.
-    // if(material->type == Material::Dielectric){
-    //     bfcEnabled = false;
-    // }else{
-    //     bfcEnabled = true;
-    // }
-    this->bvh[0].IntersectBVH(ray, *(this));
-    return ray.hitInfo.hasHit;
+    // Transform the ray into our local space.
 
+    // TODO: improve this. this is inefficient.
+    Vec3f rayOriginCache = ray.origin;
+    Vec3f rayDirCache = ray.dir;
+
+    Vec4f rayOrigin(ray.origin, 1.0f);
+    Vec4f rayDir(ray.dir, 0.0f);
+    
+    ray.origin =  Matrix::ApplyTransform(this->inverseTransform, rayOrigin);
+
+    Vec3f transformedDir = Matrix::ApplyTransform(this->inverseTransform, rayDir);
+    ray.dir = makeUnit(transformedDir);
+    // note that BVH intersection test actually hinders BFC perf gain.
+    // BFC actually slows down the computation.
+    // observed 15.5s NO bfc, 16.7s YES bfc.
     if(this->bbox.doesIntersectWith(ray)){
-        bool hasIntersected = this->bvh[0].IntersectBVH(ray, *(this));
-        // if(hasIntersected){
-        //     std::cout <<"ray hits this mesh." << std::endl;
-        // }
-        return ray.hitInfo.hasHit;
+        bool hasHit = this->bvh[0].IntersectBVH(ray, *(this));
+        // undo origin&dir changes to local space.
+        ray.origin = rayOriginCache;
+        ray.dir = rayDirCache;
+        if(hasHit){
+            ray.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(ray.hitInfo.normal, 0.0f)));
+        }
 
+        // return ray.hitInfo.hasHit;
+        return hasHit;
     }
-    else return false;
-   
- 
-
-    // for(int i = 0; i < faces.size(); i++)
-    // {
-    //     if(bfcEnabled && IsBackface(faces[i], ray.dir)){
-    //         continue;
-    //     }
-
-    //     IntersectFace(ray, faces[i]);
-    // }
-
+    else{
+        ray.origin = rayOriginCache;
+        ray.dir = rayDirCache;
+        return false;
+    } 
 }
 
 bool DorkTracer::Mesh::IntersectFace(Ray& ray, uint32_t faceIdx){
@@ -196,9 +202,13 @@ bool DorkTracer::Mesh::IntersectFace(Ray& ray, Face& face)
         ray.hitInfo.minT = newT;
         ray.hitInfo.hasHit = true;
         ray.hitInfo.normal = face.n;
-        ray.hitInfo.matId = this->material_id;
+        // ray.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(face.n, 0.0f)));
+
+        ray.hitInfo.matId = this->GetMaterial();
+        return true;
     }
-    return hasIntersected;
+    else return false;
+    // return hasIntersected;
 }
 bool DorkTracer::Mesh::IsBackface(Face& face, Vec3f& rayDir)
 {

@@ -28,7 +28,7 @@ void Camera::SetupLookAt(Vec3f pos, Vec3f gazePoint, Vec3f upDir, float nearDist
     this->imageHeight = height;
     this->imageName = imageName;
 
-    float aspect = width/height;
+    float aspect = (float)width/height;
     
     m_top = nearDist * std::tan((fovY *(M_PI / 180.0f) / 2.0f));
     m_right = m_top * aspect;
@@ -40,7 +40,9 @@ void Camera::SetupLookAt(Vec3f pos, Vec3f gazePoint, Vec3f upDir, float nearDist
     Vec3f tempUp = makeUnit(upDir);
 
     // make sure cam.up is orthogonal to cam.gaze.
-    this->up = GetOrthonormal(tempUp, gaze);
+    Vec3f tempRight = makeUnit(cross(tempUp, gaze));
+    this->up = makeUnit(cross(gaze, tempRight));
+    // this->up = makeUnit(GetOrthonormal(tempUp, gaze));
     
     CalculateImagePlaneParams();
 }

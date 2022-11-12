@@ -7,9 +7,9 @@ Raytracer::Raytracer(Scene& scene){
     this->scene = scene;
 }
 
-Vec3i Raytracer::RenderPixel(int i, int j, int camIndex)
+Vec3i Raytracer::RenderPixel(int i, int j, Camera& cam)
 {
-    return PerPixel(i,j, this->scene.cameras[camIndex]);
+    return PerPixel(i,j, cam);
 }
 
 Vec3i Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
@@ -352,8 +352,7 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
     shadowRay.hitInfo.minT = lightSourceT + 0.1f;
 
     for(int i = 0; i < scene.meshes.size(); i++){
-        Mesh* mesh = scene.meshes[i];
-        
+        Shape* mesh = scene.meshes[i];
         mesh->Intersect(shadowRay);
 
         if(shadowRay.hitInfo.hasHit && shadowRay.hitInfo.minT < lightSourceT)
@@ -364,8 +363,17 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
     }
     // Intersect with all Spheres
     for(int i = 0; i < scene.spheres.size(); i++){
-        Sphere& s = scene.spheres[i];
-        s.Intersect(shadowRay);
+        Sphere* s = scene.spheres[i];
+        s->Intersect(shadowRay);
+        if(shadowRay.hitInfo.hasHit && shadowRay.hitInfo.minT < lightSourceT)
+        {
+            // valid hit, in shadow.
+            return true;
+        }
+    }
+    for(int i = 0; i < scene.triangles.size(); i++){
+        Shape* s = scene.triangles[i];
+        s->Intersect(shadowRay);
         if(shadowRay.hitInfo.hasHit && shadowRay.hitInfo.minT < lightSourceT)
         {
             // valid hit, in shadow.
@@ -378,14 +386,20 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
 void Raytracer::IntersectObjects(Ray& ray)
 {
     for(int i = 0; i < scene.meshes.size(); i++){
-        Mesh* mesh = scene.meshes[i];
+        Shape* mesh = scene.meshes[i];
         mesh->Intersect(ray);
     }
 
     // Intersect with all Spheres
     for(int i = 0; i < scene.spheres.size(); i++){
-        Sphere& s = scene.spheres[i];
-        s.Intersect(ray);
+        Sphere* s = scene.spheres[i];
+        s->Intersect(ray);
+    }
+
+     // Intersect with all triangles
+    for(int i = 0; i < scene.triangles.size(); i++){
+        Shape* s = scene.triangles[i];
+        s->Intersect(ray);
     }
 }
 

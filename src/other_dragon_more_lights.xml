@@ -1,0 +1,73 @@
+<Scene>
+    <BackgroundColor>0 0 0</BackgroundColor>
+
+    <MaxRecursionDepth>6</MaxRecursionDepth>
+
+    <Cameras>
+        <Camera id="1" type="lookAt">
+            <Position>200 -200 180</Position>
+            <GazePoint>20 100 -100</GazePoint>
+            <Up>0 0 1</Up>
+            <FovY>45</FovY>
+            <NearDistance>1</NearDistance>
+            <ImageResolution>3840 2160</ImageResolution>
+            <ImageName>other_dragon_more_lights.png</ImageName>
+        </Camera>
+    </Cameras>
+
+    <Lights>
+        <AmbientLight>60 40 125</AmbientLight>
+        <PointLight id="1">
+            <Position>400 100 200</Position>
+            <Intensity>0 70000000 70000000</Intensity>
+        </PointLight>
+        <PointLight id="2">
+            <Position>600 -200 200</Position>
+            <Intensity>0 50000000 50000000</Intensity>
+        </PointLight>
+          <PointLight id="3">
+            <Position>-200 200 50</Position>
+            <Intensity>60000000 0 50000000</Intensity>
+        </PointLight>
+    </Lights>
+
+    <VertexData>
+        -5000 -5000 -100
+        5000 -5000 -100
+        5000 5000 -100
+        -5000 5000 -100
+    </VertexData>
+
+    <Materials>
+        <Material id="1" type="conductor">
+            <AmbientReflectance>0.2 0.2 0.2</AmbientReflectance>
+            <DiffuseReflectance>0 0 0</DiffuseReflectance>
+            <SpecularReflectance>0.3 0.86 1.0</SpecularReflectance>
+            <PhongExponent>5</PhongExponent>
+            <MirrorReflectance>1 0.86 0.57</MirrorReflectance>
+            <RefractionIndex>0.370</RefractionIndex>
+            <AbsorptionIndex>2.820</AbsorptionIndex>
+        </Material>
+        <Material id="2" type="mirror">
+            <AmbientReflectance>0.3 0.3 0.3</AmbientReflectance>
+            <DiffuseReflectance>0.1 0.1 0.1</DiffuseReflectance>
+            <SpecularReflectance>0 0 0</SpecularReflectance>
+            <PhongExponent>1</PhongExponent>
+            <MirrorReflectance>0.5 0.2 0.3</MirrorReflectance>
+        </Material>
+    </Materials>
+
+    <Objects>
+        <Mesh id="1">
+            <Material>1</Material>
+            <Faces plyFile="ply/dragon_remeshed_fixed.ply" />
+        </Mesh>
+        <Mesh id="2">
+            <Material>2</Material>
+            <Faces>
+                1 2 3
+                3 4 1
+            </Faces>
+        </Mesh>
+    </Objects>
+</Scene>

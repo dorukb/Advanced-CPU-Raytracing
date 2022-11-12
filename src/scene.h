@@ -7,7 +7,10 @@
 #include "camera.hpp"
 #include "material.hpp"
 #include "mesh.hpp"
+#include "shape.hpp"
 #include "sphere.hpp"
+#include "tinyxml2.h"
+
 
 namespace DorkTracer{
 
@@ -19,7 +22,7 @@ namespace DorkTracer{
 
     struct Scene
     {
-        //Data
+
         Vec3i background_color;
         float shadow_ray_epsilon;
         int max_recursion_depth;
@@ -28,15 +31,21 @@ namespace DorkTracer{
         std::vector<PointLight> point_lights;
         std::vector<Material> materials;
         std::vector<Vec3f> vertex_data;
-        std::vector<Mesh*> meshes;
-        std::vector<Sphere> spheres;
+        std::vector<Shape*> meshes;
+        std::vector<Sphere*> spheres;
+        std::vector<Shape*> triangles;
+        
+        std::vector<Vec3f> translations;
+        std::vector<Vec3f> scalings;
+        std::vector<Vec4f> rotations;
 
-        //Functions
         void loadFromXml(const std::string &filepath);
         void computeFaceNormal(Face& face, std::vector<Vec3f>& vertices);
         void computeFaceBoundingBox(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
         void computeFaceCenter(Face& face, std::vector<Vec3f>& vertices);
         void computeFaceProperties(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
+        void computeTransform(DorkTracer::Shape* shape, tinyxml2::XMLElement* child);
+
     };
 }
 

@@ -1,4 +1,3 @@
-#include "tinyxml2.h"
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -7,6 +6,8 @@
 #include "happly.h"
 #include "scene.h"
 #include <limits>
+#include "matrix.hpp"
+#include "instancedMesh.hpp"
 
 void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 {
@@ -145,7 +146,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         element = element->NextSiblingElement("PointLight");
     }
 
-    //Get Materials
+    // Get Materials
     element = root->FirstChildElement("Materials");
     element = element->FirstChildElement("Material");
     DorkTracer::Material material;
@@ -185,7 +186,6 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
         child = element->FirstChildElement("MirrorReflectance");
         if( child != NULL){
-            // cout <<"has mirror reflectance??"<<endl;
             stream << child->GetText() << std::endl;
             stream >> material.mirror.x >> material.mirror.y >> material.mirror.z;
         }else
@@ -204,7 +204,6 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
         child = element->FirstChildElement("AbsorptionCoefficient");
         if( child != NULL){
-            std::cout <<"has AbsorptionCoefficent"<<std::endl;
             stream << child->GetText() << std::endl;
             stream >> material.absorptionCoefficient.x >>  material.absorptionCoefficient.y >> material.absorptionCoefficient.z;
         }else
@@ -214,7 +213,6 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
         child = element->FirstChildElement("AbsorptionIndex");
         if( child != NULL){
-            std::cout <<"has Absorption Index, so must be a conductor."<<std::endl;
             stream << child->GetText() << std::endl;
             stream >> material.conductorAbsorptionIndex;
         }else
@@ -237,7 +235,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         element = element->NextSiblingElement("Material");
     }
 
-    //Get VertexData
+    // Get VertexData
     element = root->FirstChildElement("VertexData");
     stream << element->GetText() << std::endl;
     Vec3f vertex;
@@ -248,23 +246,100 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     }
     stream.clear();
 
-    //Get Meshes
+    // Get Transformations
+    element = root->FirstChildElement("Transformations");
+    if(element)
+    {
+        auto child = element->FirstChildElement("Translation");
+        while(child)
+        {
+            std::string idStr = child->Attribute("id");
+            int id = stoi(idStr);
+
+            // std::string text = child->GetText();
+            stream << child->GetText() << std::endl;
+            Vec3f translation;
+            stream >> translation.x >> translation.y >> translation.z;
+            this->translations.push_back(translation);
+
+            child = child->NextSiblingElement("Translation");
+        }
+
+        child = element->FirstChildElement("Scaling");
+        while(child)
+        {
+            std::string idStr = child->Attribute("id");
+            int id = stoi(idStr);
+
+            // std::string text = child->GetText();
+            stream << child->GetText() << std::endl;
+            Vec3f scaling;
+            stream >> scaling.x >> scaling.y >> scaling.z;
+            this->scalings.push_back(scaling);
+            
+            child = child->NextSiblingElement("Scaling");
+        }
+
+        child = element->FirstChildElement("Rotation");
+        while(child)
+        {
+            std::string idStr = child->Attribute("id");
+            int id = stoi(idStr);
+
+            // std::string text = child->GetText();
+            stream << child->GetText() << std::endl;
+
+            // rot.w = angle, rot.xyz = axis
+            Vec4f rot;
+            stream >> rot.w >> rot.x >> rot.y >> rot.z;
+            this->rotations.push_back(rot);
+            
+            child = child->NextSiblingElement("Rotation");
+        }
+
+    }
+    stream.clear();
+
+    // Get Meshes
     element = root->FirstChildElement("Objects");
     element = element->FirstChildElement("Mesh");
-
-
     while (element)
     {
+        child = element->FirstChildElement("Faces");
+        bool hasPlyData = child->Attribute("plyFile") != NULL;
 
-        // DorkTracer::Mesh mesh(this->vertex_data);
+        DorkTracer::Mesh* mesh;
 
-        DorkTracer::Mesh* mesh = new DorkTracer::Mesh(this->vertex_data);
+        if(hasPlyData)
+        {
+            std::vector<Vec3f> meshVertices;
+            mesh = new DorkTracer::Mesh(meshVertices);
+        }
+        else{
+            mesh = new DorkTracer::Mesh(this->vertex_data);
+        }
 
+        stream << element->Attribute("id") << std::endl;
+        stream >> mesh->id;
+
+        // Compute Model, invModel and invTransModel matrices from given transformations.
+        child = element->FirstChildElement("Transformations");
+        mesh->transform.MakeIdentity();
+        if(child != nullptr)
+        {
+            computeTransform(mesh, child);
+        }
+        else{
+            mesh->inverseTransform.MakeIdentity();
+            mesh->inverseTransposeTransform.MakeIdentity();
+        }
+
+        // Common ops to both cases.
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
-        stream >> mesh->material_id;
-
-        mesh->material = &materials[mesh->material_id-1];
+        int matId = 0;
+        stream >> matId;
+        mesh->SetMaterial(matId);
 
         child = element->FirstChildElement("Faces");
 
@@ -272,21 +347,17 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         bbox.maxCorner.x = bbox.maxCorner.y = bbox.maxCorner.z = std::numeric_limits<float>::min();
         bbox.minCorner.x = bbox.minCorner.y = bbox.minCorner.z = std::numeric_limits<float>::max();
         
-        if((child->Attribute("plyFile") != NULL))
+        if(hasPlyData)
         {
          // <Faces plyFile="ply/dragon_remeshed_fixed.ply" />
             // Face data is given as plyFile
-            std::cout <<"ply file!!"<<std::endl;
             
             std::string filename;
             stream << child->Attribute("plyFile");
             stream >> filename;
-            std::cout <<"Filename:"<<filename<<std::endl;
+            std::cout <<"Ply Filename:"<<filename<<std::endl;
             // Construct the data object by reading from file
             happly::PLYData plyIn(child->Attribute("plyFile"));
-
-            // Get mesh-style data from the object
-            // mesh.useOwnVertices = true;
 
             std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
             for(int i = 0; i < vPos.size(); i++){
@@ -296,7 +367,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             vPos.clear();
 
             std::vector<std::vector<int>> fInd = plyIn.getFaceIndices<int>();
-            std::cout<<"has: "<<  fInd.size() << " faces."<< std::endl;
+            std::cout<<"has: "<<  fInd.size() << " faces and "<< mesh->vertices.size() << " vertices."<< std::endl;
             for(int i = 0; i < fInd.size(); i++){
 
                 DorkTracer::Face face;
@@ -308,7 +379,27 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 face.v0_id = fInd[i][0] + 1;
                 face.v1_id = fInd[i][1] + 1;
                 face.v2_id = fInd[i][2] + 1;
-                computeFaceProperties(face, this->vertex_data);
+                computeFaceProperties(face, mesh->vertices);
+                // calculate bbox of the owner mesh here, ugly but efficient.
+                if(face.bbox.minCorner.x < bbox.minCorner.x){
+                    bbox.minCorner.x = face.bbox.minCorner.x;
+                }
+                if(face.bbox.minCorner.y < bbox.minCorner.y){
+                    bbox.minCorner.y = face.bbox.minCorner.y;
+                }
+                if(face.bbox.minCorner.z < bbox.minCorner.z){
+                    bbox.minCorner.z = face.bbox.minCorner.z;
+                }
+
+                if(face.bbox.maxCorner.x > bbox.maxCorner.x){
+                    bbox.maxCorner.x = face.bbox.maxCorner.x;
+                }
+                if(face.bbox.maxCorner.y > bbox.maxCorner.y){
+                    bbox.maxCorner.y = face.bbox.maxCorner.y;
+                }
+                if(face.bbox.maxCorner.z > bbox.maxCorner.z){
+                    bbox.maxCorner.z = face.bbox.maxCorner.z;
+                }
                 mesh->faces.push_back(face);
             }
         }
@@ -322,7 +413,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             while (!(stream >> face.v0_id).eof())
             {
                 stream >> face.v1_id >> face.v2_id;
-                computeFaceProperties(face, this->vertex_data);
+                computeFaceProperties(face, mesh->vertices);
                 
                 // calculate bbox of the owner mesh here, ugly but efficient.
                 if(face.bbox.minCorner.x < bbox.minCorner.x){
@@ -360,7 +451,84 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     stream.clear();
 
 
-// TODO: Read triangles
+    // Parse MeshInstances
+    element = root->FirstChildElement("Objects");
+    element = element->FirstChildElement("MeshInstance");
+
+    while(element)
+    {
+        bool resetTransform = false;
+        if(element->Attribute("resetTransform") != NULL){
+            std::string transformText = element->Attribute("resetTransform");
+            if(transformText == "true"){
+                resetTransform = true;
+            }
+        }
+
+        int ownId, baseMeshId;
+        stream << element->Attribute("id") << std::endl;
+        stream >> ownId;
+        stream << element->Attribute("baseMeshId") << std::endl;
+        stream >> baseMeshId;
+
+        DorkTracer::Mesh* baseMesh = nullptr;
+        for(int i = 0; i < meshes.size(); i++){
+            if(meshes[i]->id == baseMeshId){
+                baseMesh = (Mesh*) meshes[i];
+            }
+        }
+        DorkTracer::InstancedMesh* meshInstance = new InstancedMesh(baseMesh);
+        meshInstance->id = ownId;
+
+        // Get material
+        child = element->FirstChildElement("Material");
+        stream << child->GetText() << std::endl;
+        int matId = 0;
+        stream >> matId;
+        meshInstance->SetMaterial(matId);
+
+        // Get transformations
+        // Compute Model, invModel and invTransModel matrices from given transformations.
+        child = element->FirstChildElement("Transformations");
+
+        if(resetTransform == true)
+        {
+            meshInstance->transform.MakeIdentity();
+        }
+        else{
+            meshInstance->transform = baseMesh->transform;
+        }
+        
+        if(child != nullptr)
+        {
+            computeTransform(meshInstance, child);
+        }
+        else{
+            meshInstance->inverseTransform.MakeIdentity();
+            meshInstance->inverseTransposeTransform.MakeIdentity();
+        }
+
+      
+        // if(resetTransform == false)
+        // {   
+        //     // also need to factor in transform matrices of our baseMesh.
+        //     // transform matrices of baseMesh must be computed at this point.
+        //     meshInstance->transform = meshInstance->transform * baseMesh->transform;
+        //     // order must be reversed here.
+        //     meshInstance->inverseTransform = baseMesh->inverseTransform * meshInstance->inverseTransform;
+        //     meshInstance->inverseTransposeTransform = Matrix::GetTranspose(meshInstance->inverseTransform);
+        // }
+
+        // compute and set transformed bbox.
+        BoundingBox bbox = baseMesh->bbox;
+        bbox.maxCorner = Matrix::ApplyTransform(meshInstance->transform, Vec4f(bbox.maxCorner, 1.0f));
+        bbox.minCorner = Matrix::ApplyTransform(meshInstance->transform, Vec4f(bbox.minCorner, 1.0f));
+        meshInstance->bbox = bbox;
+        
+        meshes.push_back(meshInstance);
+        element = element->NextSiblingElement("MeshInstance");
+    }
+
 
     //Get Triangles, they can be represented with Mesh structure as well.
     element = root->FirstChildElement("Objects");
@@ -373,11 +541,24 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
         DorkTracer::Mesh* mesh = new DorkTracer::Mesh(this->vertex_data);
 
+        // Compute Model, invModel and invTransModel matrices from given transformations.
+        child = element->FirstChildElement("Transformations");
+        mesh->transform.MakeIdentity();
+        if(child != nullptr)
+        {
+            computeTransform(mesh, child);
+        }
+        else{
+            mesh->inverseTransform.MakeIdentity();
+            mesh->inverseTransposeTransform.MakeIdentity();
+        }
+
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
-        stream >> mesh->material_id;
+        int matId = 0;
+        stream >> matId;
+        mesh->SetMaterial(matId);
 
-        mesh->material = &materials[mesh->material_id];
         child = element->FirstChildElement("Indices");
         stream << child->GetText() << std::endl;
         // stream >> triangle.indices.v0_id >> triangle.indices.v1_id >> triangle.indices.v2_id;
@@ -387,7 +568,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         stream >> face.v0_id >> face.v1_id >> face.v2_id;
 
         // Normal, Centroid and BoundingBox computation per face.
-        computeFaceProperties(face, this->vertex_data);
+        computeFaceProperties(face, mesh->vertices);
         mesh->faces.push_back(face);
 
         // Has only one face, so the bounding boxes are identical.
@@ -403,26 +584,38 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     element = element->FirstChildElement("Sphere");
     while (element)
     {    
-        Sphere sphere(this->vertex_data);
+        Sphere* sphere = new Sphere(this->vertex_data);
+
+        // Compute Model, invModel and invTransModel matrices from given transformations.
+        child = element->FirstChildElement("Transformations");
+        sphere->transform.MakeIdentity();
+        if(child != nullptr)
+        {
+            computeTransform(sphere, child);
+        }
+        else{
+            sphere->inverseTransform.MakeIdentity();
+            sphere->inverseTransposeTransform.MakeIdentity();
+        }
+
 
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
-        stream >> sphere.material_id;
+        stream >> sphere->material_id;
 
         child = element->FirstChildElement("Center");
         stream << child->GetText() << std::endl;
-        stream >> sphere.center_vertex_id;
+        stream >> sphere->center_vertex_id;
 
         child = element->FirstChildElement("Radius");
         stream << child->GetText() << std::endl;
-        stream >> sphere.radius;
+        stream >> sphere->radius;
 
-        sphere.vertex_data = this->vertex_data;
         spheres.push_back(sphere);
         element = element->NextSiblingElement("Sphere");
     }
 
-    std::cout <<"parsing completed" << std::endl;
+    // std::cout <<"parsing succesfully completed." << std::endl;
 }
 
 void DorkTracer::Scene::computeFaceProperties(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
@@ -439,6 +632,79 @@ void DorkTracer::Scene::computeFaceCenter(DorkTracer::Face& face, std::vector<Ve
     c = vertices[face.v2_id -1];
     
     face.center = (a+b+c)/3;
+}
+
+void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, tinyxml2::XMLElement* child)
+{
+    // sample input: <Transformations>s2 s3 r2 t2</Transformations>
+            // s:scale, r:rotation, t:translation, numbers are the indices to look up.
+    std::string str = child->GetText();
+    int idx = 0;
+
+    std::vector<Matrix> invTransformations;
+    while(idx < str.size()-1)
+    {
+        if(str[idx] == 'r'){
+            int id = int(str[idx+1]-'0');
+            Vec4f rotation = this->rotations[id-1];
+            float angle = rotation.w * (M_PI / 180.0f);
+
+            // TODO: Support rotation around arbitray axis.
+            Matrix rot;
+            Matrix invRot;
+
+            std::cout<<"r"<<id<<" applied."<<std::endl;
+            if(rotation.x >= 0.99 && rotation.y <= 0.001 && rotation.z <= 0.0001){
+                rot = Matrix::GetRotationAroundX(angle);
+                invRot = Matrix::GetRotationAroundX(-angle);
+            }
+            if(rotation.y >= 0.99 && rotation.x <= 0.001 && rotation.z <= 0.0001){
+                rot = Matrix::GetRotationAroundY(angle);
+                invRot = Matrix::GetRotationAroundY(-angle);
+            }
+            if(rotation.z >= 0.99 && rotation.x <= 0.001 && rotation.y <= 0.0001){
+                rot = Matrix::GetRotationAroundZ(angle);
+                invRot = Matrix::GetRotationAroundZ(-angle);
+            }
+            invTransformations.push_back(invRot);
+            mesh->transform = rot * mesh->transform;
+        }
+        else if(str[idx] == 't'){
+            int id = int(str[idx+1]-'0');
+            Vec3f translation = this->translations[id-1];
+
+            std::cout<<"t"<<id<<" applied."<<std::endl;
+            Matrix t = Matrix::GetTranslation(translation.x, translation.y , translation.z);
+            Matrix invT = Matrix::GetTranslation(-translation.x, -translation.y , -translation.z);
+            
+            invTransformations.push_back(invT);
+            mesh->transform = t * mesh->transform;
+        }
+        else if(str[idx] == 's'){
+            int id = int(str[idx+1]-'0');
+            Vec3f scale = this->scalings[id-1];
+
+            std::cout<<"s"<<id<<" applying."<<std::endl;
+            Matrix s = Matrix::GetScale(scale.x, scale.y , scale.z);
+            Matrix invS = Matrix::GetScale(1.0f/scale.x, 1.0f/scale.y , 1.0f/scale.z);
+
+            invTransformations.push_back(invS);
+            mesh->transform = s * mesh->transform;
+        }
+        idx += 3;
+    }
+
+    mesh->inverseTransform.MakeIdentity();
+    for(int i = 0; i < invTransformations.size(); i++){
+        Matrix trans = invTransformations[i];
+        mesh->inverseTransform = mesh->inverseTransform * trans;
+
+    }
+    // Matrix modelMatrix = mesh->transform;
+    // Matrix invModel = mesh->inverseTransform;
+    mesh->inverseTransposeTransform = Matrix::GetTranspose(mesh->inverseTransform);
+
+    // Matrix idt = modelMatrix * invModel;
 }
 void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
 {

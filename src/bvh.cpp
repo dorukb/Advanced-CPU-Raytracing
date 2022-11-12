@@ -9,15 +9,23 @@ bool DorkTracer::BVH::IntersectBVH (DorkTracer::Ray& ray, DorkTracer::Mesh& owne
         return false;
     }
 
+    bool hasHit = false;
     if(left == nullptr && right == nullptr && faceCount > 0){
         // Leaf node.
         for(int i = firstFace; i < firstFace+faceCount; i++){
-            ownerMesh.IntersectFace(ray, i);
+            bool faceHit = ownerMesh.IntersectFace(ray, i);
+            if(faceHit){
+                hasHit = true;
+            }
         }
     }   
     else{
-        left->IntersectBVH(ray, ownerMesh);
-        right->IntersectBVH(ray, ownerMesh);
+        bool hitLeft = left->IntersectBVH(ray, ownerMesh);
+        bool hitRight = right->IntersectBVH(ray, ownerMesh);
+        if(hitLeft || hitRight){
+            hasHit = true;
+        }
     }
-    return ray.hitInfo.hasHit;
+    // return ray.hitInfo.hasHit;
+    return hasHit;
 }

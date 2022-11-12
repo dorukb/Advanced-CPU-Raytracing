@@ -36,6 +36,13 @@ struct Vec3i
 struct Vec4f
 {
     float x, y, z, w;
+    Vec4f(){}
+    Vec4f(Vec3f& v, float wVal){
+        x = v.x;
+        y = v.y;
+        z = v.z;
+        w = wVal;
+    }
 };
 Vec3f cross(const Vec3f &first, const Vec3f &second);
 float dot(const Vec3f &a, const Vec3f &b);

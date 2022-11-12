@@ -13,7 +13,7 @@ namespace DorkTracer
     public:
         Scene scene;
         Raytracer(Scene& scene);
-        Vec3i RenderPixel(int i, int j, int camIndex);
+        Vec3i RenderPixel(int i, int j, Camera& cam);
 
     private:
         Vec3i PerPixel(int i, int j, Camera& cam);
