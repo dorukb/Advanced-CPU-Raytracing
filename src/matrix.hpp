@@ -106,8 +106,18 @@ namespace DorkTracer{
 
                 float w = t[3][0] * v.x + t[3][1] * v.y +
                         t[3][2] * v.z + t[3][3] * v.w;
-               
+
                 return res;
+            }
+            
+            static Vec3f ApplyTransformToPoint(Matrix& t, Vec3f p)
+            {
+                return ApplyTransform(t, Vec4f(p, 1.0f));
+            }
+
+            static Vec3f ApplyTransformToVector(Matrix& t, Vec3f p)
+            {
+                return ApplyTransform(t, Vec4f(p, 0.0f));
             }
 
             Matrix operator*(Matrix& rhs){

@@ -332,7 +332,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
         if(child != nullptr)
         {
-            computeTransform(mesh, child);
+            std::string input = child->GetText();
+            computeTransform(mesh, input);
         }
 
         // Common ops to both cases.
@@ -471,10 +472,15 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
         // Get material
         child = element->FirstChildElement("Material");
-        stream << child->GetText() << std::endl;
-        int matId = 0;
-        stream >> matId;
-        meshInstance->SetMaterial(matId);
+        if(child != nullptr){
+            stream << child->GetText() << std::endl;
+            int matId = 0;
+            stream >> matId;
+            meshInstance->SetMaterial(matId);
+        }
+        else{
+            meshInstance->SetMaterial(baseMesh->GetMaterial());
+        }
 
         // Get transformations
         child = element->FirstChildElement("Transformations");
@@ -483,7 +489,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         if(child != nullptr)
         {
             // Compute Model, invModel and invTransModel matrices from given transformations.
-            computeTransform(meshInstance, child);
+            std::string input = child->GetText();
+            computeTransform(meshInstance, input);
 
             if(resetTransform == false){
                 
@@ -497,10 +504,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         }
 
         // compute and set transformed bbox.
-        BoundingBox bbox;
-        bbox.maxCorner = Matrix::ApplyTransform(meshInstance->transform, Vec4f(baseMesh->bbox.maxCorner, 1.0f));
-        bbox.minCorner = Matrix::ApplyTransform(meshInstance->transform, Vec4f(baseMesh->bbox.minCorner, 1.0f));
-        meshInstance->bbox = bbox;
+        meshInstance->bbox = transformBoundingBox(baseMesh->bbox, meshInstance->transform);
         
         meshes.push_back(meshInstance);
         element = element->NextSiblingElement("MeshInstance");
@@ -520,7 +524,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         mesh->transform.MakeIdentity();
         if(child != nullptr)
         {
-            computeTransform(mesh, child);
+            std::string input = child->GetText();
+            computeTransform(mesh, input);
         }
         else{
             mesh->inverseTransform.MakeIdentity();
@@ -565,7 +570,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         sphere->transform.MakeIdentity();
         if(child != nullptr)
         {
-            computeTransform(sphere, child);
+            std::string input = child->GetText();
+            computeTransform(sphere, input);
         }
         else{
             sphere->inverseTransform.MakeIdentity();
@@ -608,11 +614,12 @@ void DorkTracer::Scene::computeFaceCenter(DorkTracer::Face& face, std::vector<Ve
     face.center = (a+b+c)/3;
 }
 
-void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, tinyxml2::XMLElement* child)
+void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, std::string transformationInput)
 {
     // sample input: <Transformations>s2 s3 r2 t2</Transformations>
+    // param: "s2 s3 r2 t2"
             // s:scale, r:rotation, t:translation, numbers are the indices to look up.
-    std::string str = child->GetText();
+    std::string str = transformationInput;
     int idx = 0;
 
     std::vector<Matrix> invTransformations;
@@ -627,7 +634,7 @@ void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, tinyxml2::XMLE
             Matrix rot;
             Matrix invRot;
 
-            std::cout<<"r"<<id<<" applied."<<std::endl;
+            // std::cout<<"r"<<id<<" applied."<<std::endl;
             if(rotation.x >= 0.99 && rotation.y <= 0.001 && rotation.z <= 0.0001){
                 rot = Matrix::GetRotationAroundX(angle);
                 invRot = Matrix::GetRotationAroundX(-angle);
@@ -647,7 +654,7 @@ void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, tinyxml2::XMLE
             int id = int(str[idx+1]-'0');
             Vec3f translation = this->translations[id-1];
 
-            std::cout<<"t"<<id<<" applied."<<std::endl;
+            // std::cout<<"t"<<id<<" applied."<<std::endl;
             Matrix t = Matrix::GetTranslation(translation.x, translation.y , translation.z);
             Matrix invT = Matrix::GetTranslation(-translation.x, -translation.y , -translation.z);
             
@@ -658,7 +665,7 @@ void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, tinyxml2::XMLE
             int id = int(str[idx+1]-'0');
             Vec3f scale = this->scalings[id-1];
 
-            std::cout<<"s"<<id<<" applying."<<std::endl;
+            // std::cout<<"s"<<id<<" applying."<<std::endl;
             Matrix s = Matrix::GetScale(scale.x, scale.y , scale.z);
             Matrix invS = Matrix::GetScale(1.0f/scale.x, 1.0f/scale.y , 1.0f/scale.z);
 
@@ -674,12 +681,11 @@ void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, tinyxml2::XMLE
         mesh->inverseTransform = mesh->inverseTransform * trans;
 
     }
-    Matrix modelMatrix = mesh->transform;
-    Matrix invModel = mesh->inverseTransform;
+    // Matrix modelMatrix = mesh->transform;
+    // Matrix invModel = mesh->inverseTransform;
     mesh->inverseTransposeTransform = Matrix::GetTranspose(mesh->inverseTransform);
 
-    Matrix idt = modelMatrix * invModel;
-    std::cout<<"d";
+    // Matrix idt = modelMatrix * invModel;
 }
 void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
 {
@@ -704,4 +710,62 @@ void DorkTracer::Scene::computeFaceBoundingBox(DorkTracer::Face& face, std::vect
     face.bbox.maxCorner.x = std::max(std::max(a.x, b.x), c.x);    
     face.bbox.maxCorner.y = std::max(std::max(a.y, b.y), c.y);
     face.bbox.maxCorner.z = std::max(std::max(a.z, b.z), c.z);
+}
+
+DorkTracer::BoundingBox DorkTracer::Scene::transformBoundingBox(DorkTracer::BoundingBox original, DorkTracer::Matrix& transform)
+{
+
+    // Transformed box is no longer axis aligned, so can not correctly decide on min max using just 2 corners as before.
+    // Calculate all 8 corners of the original, transform each,
+    // create another aligned bounding box out of min max.
+    BoundingBox res;
+    res.maxCorner.x = res.maxCorner.y = res.maxCorner.z = -INFINITY;
+    res.minCorner.x = res.minCorner.y = res.minCorner.z = INFINITY;
+
+    std::vector<Vec3f> corners;
+    corners.push_back(original.maxCorner);
+    corners.push_back(original.minCorner);
+
+    Vec3f extents = original.maxCorner - original.minCorner;
+    Vec3f corner = original.maxCorner;
+    corner.x -= extents.x;
+    corners.push_back(corner);
+
+    corner = original.maxCorner;
+    corner.y -= extents.y;
+    corners.push_back(corner);
+
+    corner = original.maxCorner;
+    corner.z -= extents.z;
+    corners.push_back(corner);
+    
+    corner = original.maxCorner;
+    corner.x -= extents.x;
+    corner.y -= extents.y;
+    corners.push_back(corner);
+    
+    corner = original.maxCorner;
+    corner.x -= extents.x;
+    corner.z -= extents.z;
+    corners.push_back(corner);
+
+    corner = original.maxCorner;
+    corner.y -= extents.y;
+    corner.z -= extents.z;
+    corners.push_back(corner);
+
+    for(int i = 0; i < corners.size(); i++)
+    {
+        corners[i] = Matrix::ApplyTransformToPoint(transform, corners[i]);
+        
+        res.maxCorner.x = std::max(corners[i].x, res.maxCorner.x);
+        res.maxCorner.y = std::max(corners[i].y, res.maxCorner.y); 
+        res.maxCorner.z = std::max(corners[i].z, res.maxCorner.z);
+
+        res.minCorner.x = std::min(corners[i].x, res.minCorner.x);
+        res.minCorner.y = std::min(corners[i].y, res.minCorner.y);
+        res.minCorner.z = std::min(corners[i].z, res.minCorner.z);
+    }   
+    
+    return res;
 }

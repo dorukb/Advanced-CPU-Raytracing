@@ -60,6 +60,8 @@ int main(int argc, char* argv[])
         unsigned char* image = new unsigned char [width * height * 3];
 
         std::cout<<"Resolution: "<<width <<"x"<<height << std::endl;
+        std::cout<<"Running on: "<<THREAD_COUNT <<" threads." << std::endl;
+
         std::vector<std::thread> renderThreads;
         renderThreads.resize(THREAD_COUNT);
 

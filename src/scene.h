@@ -44,8 +44,8 @@ namespace DorkTracer{
         void computeFaceBoundingBox(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
         void computeFaceCenter(Face& face, std::vector<Vec3f>& vertices);
         void computeFaceProperties(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
-        void computeTransform(DorkTracer::Shape* shape, tinyxml2::XMLElement* child);
-
+        void computeTransform(DorkTracer::Shape* shape, std::string input);
+        DorkTracer::BoundingBox transformBoundingBox(DorkTracer::BoundingBox original, DorkTracer::Matrix& transform);
     };
 }
 
