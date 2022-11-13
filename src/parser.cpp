@@ -318,20 +318,21 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         else{
             mesh = new DorkTracer::Mesh(this->vertex_data);
         }
+        mesh->isInstance = false;
 
         stream << element->Attribute("id") << std::endl;
         stream >> mesh->id;
 
         // Compute Model, invModel and invTransModel matrices from given transformations.
         child = element->FirstChildElement("Transformations");
+
         mesh->transform.MakeIdentity();
+        mesh->inverseTransform.MakeIdentity();
+        mesh->inverseTransposeTransform.MakeIdentity();
+
         if(child != nullptr)
         {
             computeTransform(mesh, child);
-        }
-        else{
-            mesh->inverseTransform.MakeIdentity();
-            mesh->inverseTransposeTransform.MakeIdentity();
         }
 
         // Common ops to both cases.
@@ -349,9 +350,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         
         if(hasPlyData)
         {
-         // <Faces plyFile="ply/dragon_remeshed_fixed.ply" />
             // Face data is given as plyFile
-            
             std::string filename;
             stream << child->Attribute("plyFile");
             stream >> filename;
@@ -380,26 +379,16 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 face.v1_id = fInd[i][1] + 1;
                 face.v2_id = fInd[i][2] + 1;
                 computeFaceProperties(face, mesh->vertices);
-                // calculate bbox of the owner mesh here, ugly but efficient.
-                if(face.bbox.minCorner.x < bbox.minCorner.x){
-                    bbox.minCorner.x = face.bbox.minCorner.x;
-                }
-                if(face.bbox.minCorner.y < bbox.minCorner.y){
-                    bbox.minCorner.y = face.bbox.minCorner.y;
-                }
-                if(face.bbox.minCorner.z < bbox.minCorner.z){
-                    bbox.minCorner.z = face.bbox.minCorner.z;
-                }
 
-                if(face.bbox.maxCorner.x > bbox.maxCorner.x){
-                    bbox.maxCorner.x = face.bbox.maxCorner.x;
-                }
-                if(face.bbox.maxCorner.y > bbox.maxCorner.y){
-                    bbox.maxCorner.y = face.bbox.maxCorner.y;
-                }
-                if(face.bbox.maxCorner.z > bbox.maxCorner.z){
-                    bbox.maxCorner.z = face.bbox.maxCorner.z;
-                }
+                // calculate bbox of the owner mesh here
+                bbox.minCorner.x = std::min(face.bbox.minCorner.x,  bbox.minCorner.x);
+                bbox.minCorner.y = std::min(face.bbox.minCorner.y,  bbox.minCorner.y);
+                bbox.minCorner.z = std::min(face.bbox.minCorner.z,  bbox.minCorner.z);
+
+                bbox.maxCorner.x = std::max(face.bbox.maxCorner.x, bbox.maxCorner.x);
+                bbox.maxCorner.y = std::max(face.bbox.maxCorner.y, bbox.maxCorner.y);
+                bbox.maxCorner.z = std::max(face.bbox.maxCorner.z, bbox.maxCorner.z);
+
                 mesh->faces.push_back(face);
             }
         }
@@ -415,26 +404,15 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 stream >> face.v1_id >> face.v2_id;
                 computeFaceProperties(face, mesh->vertices);
                 
-                // calculate bbox of the owner mesh here, ugly but efficient.
-                if(face.bbox.minCorner.x < bbox.minCorner.x){
-                    bbox.minCorner.x = face.bbox.minCorner.x;
-                }
-                if(face.bbox.minCorner.y < bbox.minCorner.y){
-                    bbox.minCorner.y = face.bbox.minCorner.y;
-                }
-                if(face.bbox.minCorner.z < bbox.minCorner.z){
-                    bbox.minCorner.z = face.bbox.minCorner.z;
-                }
+                // calculate bbox of the owner mesh here
+                bbox.minCorner.x = std::min(face.bbox.minCorner.x,  bbox.minCorner.x);
+                bbox.minCorner.y = std::min(face.bbox.minCorner.y,  bbox.minCorner.y);
+                bbox.minCorner.z = std::min(face.bbox.minCorner.z,  bbox.minCorner.z);
 
-                if(face.bbox.maxCorner.x > bbox.maxCorner.x){
-                    bbox.maxCorner.x = face.bbox.maxCorner.x;
-                }
-                if(face.bbox.maxCorner.y > bbox.maxCorner.y){
-                    bbox.maxCorner.y = face.bbox.maxCorner.y;
-                }
-                if(face.bbox.maxCorner.z > bbox.maxCorner.z){
-                    bbox.maxCorner.z = face.bbox.maxCorner.z;
-                }
+                bbox.maxCorner.x = std::max(face.bbox.maxCorner.x, bbox.maxCorner.x);
+                bbox.maxCorner.y = std::max(face.bbox.maxCorner.y, bbox.maxCorner.y);
+                bbox.maxCorner.z = std::max(face.bbox.maxCorner.z, bbox.maxCorner.z);
+
                 mesh->faces.push_back(face);
             }
         }
@@ -471,14 +449,25 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         stream << element->Attribute("baseMeshId") << std::endl;
         stream >> baseMeshId;
 
+        // If instancing is not nested, parentMesh = baseMesh.
+        // but if instance has another instance as the parent, then baseMesh will be different.
+        DorkTracer::Mesh* parentMesh = nullptr;
         DorkTracer::Mesh* baseMesh = nullptr;
+
         for(int i = 0; i < meshes.size(); i++){
             if(meshes[i]->id == baseMeshId){
-                baseMesh = (Mesh*) meshes[i];
+                parentMesh = (Mesh*) meshes[i];
             }
         }
+
+        baseMesh = parentMesh;
+        while(baseMesh->isInstance){
+            baseMesh = (*(InstancedMesh*)baseMesh).baseMesh;
+        }
+
         DorkTracer::InstancedMesh* meshInstance = new InstancedMesh(baseMesh);
         meshInstance->id = ownId;
+        meshInstance->isInstance = true;
 
         // Get material
         child = element->FirstChildElement("Material");
@@ -488,41 +477,29 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         meshInstance->SetMaterial(matId);
 
         // Get transformations
-        // Compute Model, invModel and invTransModel matrices from given transformations.
         child = element->FirstChildElement("Transformations");
-
-        if(resetTransform == true)
-        {
-            meshInstance->transform.MakeIdentity();
-        }
-        else{
-            meshInstance->transform = baseMesh->transform;
-        }
-        
+        meshInstance->transform.MakeIdentity();
+        meshInstance->inverseTransform.MakeIdentity();
         if(child != nullptr)
         {
+            // Compute Model, invModel and invTransModel matrices from given transformations.
             computeTransform(meshInstance, child);
-        }
-        else{
-            meshInstance->inverseTransform.MakeIdentity();
-            meshInstance->inverseTransposeTransform.MakeIdentity();
-        }
 
-      
-        // if(resetTransform == false)
-        // {   
-        //     // also need to factor in transform matrices of our baseMesh.
-        //     // transform matrices of baseMesh must be computed at this point.
-        //     meshInstance->transform = meshInstance->transform * baseMesh->transform;
-        //     // order must be reversed here.
-        //     meshInstance->inverseTransform = baseMesh->inverseTransform * meshInstance->inverseTransform;
-        //     meshInstance->inverseTransposeTransform = Matrix::GetTranspose(meshInstance->inverseTransform);
-        // }
+            if(resetTransform == false){
+                
+                // also need to factor in transform matrices of our baseMesh.
+                meshInstance->transform = meshInstance->transform * parentMesh->transform;
+
+                // order must be reversed here.
+                meshInstance->inverseTransform = parentMesh->inverseTransform * meshInstance->inverseTransform;
+                meshInstance->inverseTransposeTransform = Matrix::GetTranspose(meshInstance->inverseTransform);
+            }
+        }
 
         // compute and set transformed bbox.
-        BoundingBox bbox = baseMesh->bbox;
-        bbox.maxCorner = Matrix::ApplyTransform(meshInstance->transform, Vec4f(bbox.maxCorner, 1.0f));
-        bbox.minCorner = Matrix::ApplyTransform(meshInstance->transform, Vec4f(bbox.minCorner, 1.0f));
+        BoundingBox bbox;
+        bbox.maxCorner = Matrix::ApplyTransform(meshInstance->transform, Vec4f(baseMesh->bbox.maxCorner, 1.0f));
+        bbox.minCorner = Matrix::ApplyTransform(meshInstance->transform, Vec4f(baseMesh->bbox.minCorner, 1.0f));
         meshInstance->bbox = bbox;
         
         meshes.push_back(meshInstance);
@@ -534,11 +511,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     element = root->FirstChildElement("Objects");
     element = element->FirstChildElement("Triangle");
     
-    // std::shared_ptr<Triangle> p = std::make_shared<Triangle>();
     while (element)
     {
-        // DorkTracer::Mesh mesh(this->vertex_data);
-
         DorkTracer::Mesh* mesh = new DorkTracer::Mesh(this->vertex_data);
 
         // Compute Model, invModel and invTransModel matrices from given transformations.
@@ -700,11 +674,12 @@ void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, tinyxml2::XMLE
         mesh->inverseTransform = mesh->inverseTransform * trans;
 
     }
-    // Matrix modelMatrix = mesh->transform;
-    // Matrix invModel = mesh->inverseTransform;
+    Matrix modelMatrix = mesh->transform;
+    Matrix invModel = mesh->inverseTransform;
     mesh->inverseTransposeTransform = Matrix::GetTranspose(mesh->inverseTransform);
 
-    // Matrix idt = modelMatrix * invModel;
+    Matrix idt = modelMatrix * invModel;
+    std::cout<<"d";
 }
 void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
 {

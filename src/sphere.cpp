@@ -22,7 +22,8 @@ bool DorkTracer::Sphere::Intersect(Ray& r){
     Vec3f transformedDir = Matrix::ApplyTransform(this->inverseTransform, rayDir);
 
     r.origin = transformedOrigin;
-    r.dir = makeUnit(transformedDir);
+    // r.dir = makeUnit(transformedDir);
+    r.dir = transformedDir;
 
     Vec3f oc = r.origin - center;
     float t,t1, t2;
@@ -61,7 +62,7 @@ bool DorkTracer::Sphere::Intersect(Ray& r){
         // todo: consider ignoring negative t before selecting the min.
 
         Vec3f localhitPoint = r.origin + r.dir * t;
-        // undo ray transformation
+        // // undo ray transformation
         r.origin = rayOriginCache;
         r.dir = rayDirCache;
 
@@ -69,12 +70,14 @@ bool DorkTracer::Sphere::Intersect(Ray& r){
             r.hitInfo.minT = t;
             r.hitInfo.matId = material_id;
             r.hitInfo.hasHit = true;
-
-
             // calculate sphere normal at hit point
             Vec3f worldHitPoint = r.origin + r.dir * t;
-            // r.hitInfo.normal = makeUnit(worldHitPoint - center);
-            r.hitInfo.normal = makeUnit(worldHitPoint - worldCenter);
+
+            r.hitInfo.normal = makeUnit(localhitPoint - center);
+            r.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(r.hitInfo.normal, 0.0f)));
+
+            // r.hitInfo.normal = makeUnit(worldHitPoint - worldCenter);
+            // r.hitInfo.normal = worldHitPoint - worldCenter;
 
             return true;
         }

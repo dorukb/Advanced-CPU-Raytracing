@@ -152,18 +152,15 @@ void DorkTracer::Mesh::RecomputeBoundingBox(uint32_t nodeIdx)
 bool DorkTracer::Mesh::Intersect(Ray& ray)
 {    
     // Transform the ray into our local space.
-
-    // TODO: improve this. this is inefficient.
     Vec3f rayOriginCache = ray.origin;
     Vec3f rayDirCache = ray.dir;
 
     Vec4f rayOrigin(ray.origin, 1.0f);
     Vec4f rayDir(ray.dir, 0.0f);
     
-    ray.origin =  Matrix::ApplyTransform(this->inverseTransform, rayOrigin);
+    ray.origin = Matrix::ApplyTransform(this->inverseTransform, rayOrigin);
+    ray.dir = Matrix::ApplyTransform(this->inverseTransform, rayDir);
 
-    Vec3f transformedDir = Matrix::ApplyTransform(this->inverseTransform, rayDir);
-    ray.dir = makeUnit(transformedDir);
     // note that BVH intersection test actually hinders BFC perf gain.
     // BFC actually slows down the computation.
     // observed 15.5s NO bfc, 16.7s YES bfc.
@@ -175,8 +172,6 @@ bool DorkTracer::Mesh::Intersect(Ray& ray)
         if(hasHit){
             ray.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(ray.hitInfo.normal, 0.0f)));
         }
-
-        // return ray.hitInfo.hasHit;
         return hasHit;
     }
     else{

@@ -347,6 +347,7 @@ bool Raytracer::IsInShadow(Vec3f& intersectionPoint, Vec3f& lightPos)
     float lightSourceT = len(lightPos - intersectionPoint);
     Ray shadowRay;
     shadowRay.dir = makeUnit(lightPos - intersectionPoint);
+
     shadowRay.origin = intersectionPoint + shadowRay.dir * scene.shadow_ray_epsilon;
     shadowRay.hitInfo.hasHit = false;
     shadowRay.hitInfo.minT = lightSourceT + 0.1f;
@@ -392,8 +393,8 @@ void Raytracer::IntersectObjects(Ray& ray)
 
     // Intersect with all Spheres
     for(int i = 0; i < scene.spheres.size(); i++){
-        Sphere* s = scene.spheres[i];
-        s->Intersect(ray);
+        Shape* sphere = scene.spheres[i];
+        sphere->Intersect(ray);
     }
 
      // Intersect with all triangles
@@ -409,7 +410,7 @@ Ray  Raytracer::GenerateRay(int i, int j, Camera& cam)
     Vec3f imagePlanePos = cam.GetImagePlanePosition(i,j);
 
     ray.origin = cam.position;
-    ray.dir = makeUnit(imagePlanePos - ray.origin);
+    ray.dir = imagePlanePos - ray.origin;
     
     ray.hitInfo.hasHit = false;
     ray.hitInfo.minT = INFINITY;
