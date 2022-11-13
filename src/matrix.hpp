@@ -106,13 +106,7 @@ namespace DorkTracer{
 
                 float w = t[3][0] * v.x + t[3][1] * v.y +
                         t[3][2] * v.z + t[3][3] * v.w;
-                if(w > 0){
-                    res = res / w;
-                }
-                // if(w > 0.0001 && w < 1.0){
-                //     std::cout<<"what??"<<std::endl;
-                // }
-
+               
                 return res;
             }
 
@@ -149,21 +143,6 @@ namespace DorkTracer{
         private:
             mat m_mat;
     };
-
-    
-    // class vecd 
-    // {
-    //     std::vector<double>& row;
-
-    // public:
-    //     vecd(std::vector<double>& r) : row(r) {}
-
-    //     double& operator[](uint32_t y) 
-    //     {
-    //         return row.at(y);
-    //     }
-    // };
-    
 }
 
 #endif

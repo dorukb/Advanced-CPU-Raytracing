@@ -5,7 +5,6 @@ using namespace DorkTracer;
 
 DorkTracer::InstancedMesh::InstancedMesh(Mesh* baseMesh)
 {
-    // todo use resetTransform flag.
     this->baseMesh = baseMesh;
 }
 
@@ -23,8 +22,8 @@ bool DorkTracer::InstancedMesh::Intersect(Ray& ray)
     // check if it intersects our transformed top-most level BoundingBox.
     // if(this->bbox.doesIntersectWith(ray))
     // {
-    //     // Transform the ray into our local space.
-
+        
+        // Transform the ray into our local space.
         Vec4f rayOrigin(ray.origin, 1.0f);
         Vec4f rayDir(ray.dir, 0.0f);
         

@@ -16,15 +16,8 @@ void Camera::SetupDefault(Vec3f pos, Vec3f gazeDir, Vec3f upDir, Vec4f nearPlane
     this->gaze = makeUnit(gazeDir);
     Vec3f tempUp = makeUnit(upDir);
 
-    
-    // this->gaze =gazeDir;
-    // Vec3f tempUp =upDir;
-
     // make sure cam.up is orthogonal to cam.gaze.
-    this->up = GetOrthonormal(tempUp, gaze);
-
-    this->up = makeUnit(this->up);
-    // this->gaze = makeUnit(this->gaze);
+    this->up = makeUnit(GetOrthonormal(tempUp, gaze));
 
     CalculateImagePlaneParams();
 }
@@ -49,7 +42,6 @@ void Camera::SetupLookAt(Vec3f pos, Vec3f gazePoint, Vec3f upDir, float nearDist
     // make sure cam.up is orthogonal to cam.gaze.
     Vec3f tempRight = makeUnit(cross(tempUp, gaze));
     this->up = makeUnit(cross(gaze, tempRight));
-    // this->up = makeUnit(GetOrthonormal(tempUp, gaze));
     
     CalculateImagePlaneParams();
 }

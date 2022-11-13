@@ -13,6 +13,7 @@ namespace DorkTracer{
     {
         
     public:
+        bool isInstance = false;
         int id;
         Matrix transform;
         Matrix inverseTransform;
@@ -42,8 +43,6 @@ namespace DorkTracer{
                 tmin = tx2;
                 tmax = tx1;
             }
-            // float tmin = std::min(tx1, tx2);
-            // float tmax = std::max(tx1, tx2);
 
             float ty1 = (minCorner.y - ray.origin.y) / ray.dir.y;
             float ty2 = (maxCorner.y - ray.origin.y) / ray.dir.y;
