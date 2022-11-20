@@ -1,2 +1,9 @@
 /.vscode
 /build
+src/build/Debug/helperMath.o
+*.o
+*.xml
+*.png
+*.ply
+*.mp4
+*.mp3
