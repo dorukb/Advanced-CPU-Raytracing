@@ -1,29 +1,37 @@
 #include "raytracer.hpp"
 #include <iostream>
+#include <random>
 
 using namespace DorkTracer;
 
 Raytracer::Raytracer(Scene& scene){
+    this->gRandomGenerator = std::mt19937();
+    this->roughnessRandomDistro01 =  std::uniform_real_distribution<>(-0.5f, 0.5);
     this->scene = scene;
 }
 
-Vec3i Raytracer::RenderPixel(int i, int j, Camera& cam)
+float Raytracer::GetRandom01()
+{
+    return this->roughnessRandomDistro01(this->gRandomGenerator);
+}
+Vec3f Raytracer::RenderPixel(int i, int j, Camera& cam)
 {
     return PerPixel(i,j, cam);
 }
 
-Vec3i Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
+Vec3f Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
 {
     Ray ray = GenerateRay(coordX, coordY, cam);
     
+    Vec3f bgColor = {scene.background_color.x, scene.background_color.y, scene.background_color.z};
     // Intersect with all Objects in the scene to find the closest intersection point, if any.
     IntersectObjects(ray);
     
     if(ray.hitInfo.hasHit)
     {
-       return clamp(PerformShading(ray, cam.position, scene.max_recursion_depth));
+       return PerformShading(ray, cam.position, scene.max_recursion_depth);
     }
-    else return scene.background_color;
+    else return bgColor;
 }
 
 Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
@@ -67,7 +75,7 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
     else if(mat.type == Material::Mirror)
     {
         // Compute radiance along the ideal reflection ray
-        color = color + ComputeMirrorReflection(mat.mirror, w_o, ray.hitInfo.normal, intersectionPoint, recursionDepth);
+        color = color + ComputeMirrorReflection(mat, w_o, ray.hitInfo.normal, intersectionPoint, recursionDepth);
     }
     else if(mat.type == Material::Dielectric)
     {
@@ -80,10 +88,10 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
         // Reflection & absorption, no tranmission.
         color = color + ComputeConductorFresnelReflection(w_o, ray.hitInfo.normal, intersectionPoint, mat, recursionDepth);
     }
-    Vec3i c = clamp(color);
-    color.x = c.x;
-    color.y = c.y;
-    color.z = c.z;
+    // Vec3i c = clamp(color);
+    // color.x = c.x;
+    // color.y = c.y;
+    // color.z = c.z;
     
     return color;
 }
@@ -115,7 +123,7 @@ Vec3f Raytracer::ComputeConductorFresnelReflection(Vec3f& w_o, Vec3f& n, Vec3f i
     {
         Vec3f reflectedRaysColor;
         {
-            Vec3f w_reflected = Reflect(n, w_o);
+            Vec3f w_reflected = Reflect(n, w_o, conductorMat.roughness);
 
             Ray ray;
             ray.origin = intPoint + n * scene.shadow_ray_epsilon;
@@ -178,7 +186,7 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
     {
         // then inside of square root is negative, total internal reflection case.
         // perform reflection only, Fr = 1, Ft = 0.
-        Vec3f w_r =  Reflect(normal, w_o);
+        Vec3f w_r =  Reflect(normal, w_o, mat.roughness);
 
         // Do reflection?
         Ray ray;
@@ -215,7 +223,7 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
 
        Vec3f reflectedRaysColor;
         {
-            Vec3f w_reflected = Reflect(normal, w_o);
+            Vec3f w_reflected = Reflect(normal, w_o, mat.roughness);
 
             // Again do reflection here
             Ray ray;
@@ -246,7 +254,17 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Material& mat, 
         Vec3f refractedRaysColor;
         {
             Vec3f w_refracted = (d + normal * cosTheta) * r - normal * cosPhi;
+            // also perturb the refraction ray?
+
+            Vec3f u,v;
+            GetOrthonormalBasis(w_refracted, u ,v);
+
+            float psi1 = GetRandom01();
+            float psi2 = GetRandom01();
+
+            w_refracted = makeUnit(w_refracted + (u*psi1 + v*psi2)* mat.roughness);
             
+
             Ray ray;
             ray.dir = makeUnit(w_refracted);
             ray.origin = x + (-normal) * scene.shadow_ray_epsilon;
@@ -293,12 +311,26 @@ Vec3f Raytracer::BeersLaw(float x, Vec3f c, Vec3f L_0){
     res.z = L_0.z * std::exp(-c.z * x);
     return res;
 }
-Vec3f Raytracer::Reflect(Vec3f& normal, Vec3f& w_o)
+Vec3f Raytracer::Reflect(Vec3f& normal, Vec3f& w_o, float roughness)
 {
-    return makeUnit((normal * 2.0f * dot(normal, w_o)) - w_o);
+    // assign a generator per thread, this is costly to do here, and stupid.
+
+    Vec3f r = makeUnit((normal * 2.0f * dot(normal, w_o)) - w_o);
+    if(roughness > 0.001)
+    {
+        Vec3f u,v;
+        GetOrthonormalBasis(r, u ,v);
+
+        float psi1 = GetRandom01();
+        float psi2 = GetRandom01();
+
+        Vec3f rPrime = makeUnit(r + (u*psi1 + v*psi2)*roughness);
+        return rPrime;
+    }
+    else return r;
 }
 
-Vec3f Raytracer::ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& normal, Vec3f& intersectionPoint, int recursionDepth)
+Vec3f Raytracer::ComputeMirrorReflection(Material& mat, Vec3f& w_o, Vec3f& normal, Vec3f& intersectionPoint, int recursionDepth)
 {
     if (recursionDepth == 0)
     {
@@ -306,7 +338,7 @@ Vec3f Raytracer::ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& n
     }
     else 
     {
-        Vec3f w_r =  Reflect(normal, w_o);
+        Vec3f w_r =  Reflect(normal, w_o, mat.roughness);
 
         Ray ray;
         ray.origin = intersectionPoint + normal * scene.shadow_ray_epsilon;
@@ -318,7 +350,7 @@ Vec3f Raytracer::ComputeMirrorReflection(Vec3f reflectance, Vec3f& w_o, Vec3f& n
         IntersectObjects(ray);
         if(ray.hitInfo.hasHit)
         {
-            return reflectance * PerformShading(ray, ray.origin, recursionDepth-1);
+            return mat.mirror * PerformShading(ray, ray.origin, recursionDepth-1);
         }
         else return Vec3f{0,0,0};
     }

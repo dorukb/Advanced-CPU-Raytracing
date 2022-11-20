@@ -4,7 +4,10 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <random>
 #include "raytracer.hpp"
+#include "helperMath.h"
+#include "gaussian.h"
 
 #define THREAD_COUNT 8
 
@@ -14,6 +17,7 @@ struct RenderThreadArgs{
     int threadIndex;
     unsigned char *imagePtr;
 };
+
 
 void renderThreadMain(RenderThreadArgs args)
 {
@@ -28,31 +32,89 @@ void renderThreadMain(RenderThreadArgs args)
     int startingHeight = threadIndex * (height / THREAD_COUNT);
     int endingHeight = startingHeight + (height / THREAD_COUNT);
     // Iterate over the part of the image plane that belongs to this thread.
+
+    int samplesPerPixel = cam->samplesPerPixel;
+    bool isMultisampling = samplesPerPixel > 1;
+    int nRows = std::sqrt(samplesPerPixel);
+
+    Vec2f* samples = new Vec2f[samplesPerPixel];
+
+    std::mt19937 gRandomGenerator;
+    std::uniform_real_distribution<> gNURandomDistribution(0, 1);
+
+    float pixelWidth = 1.0f;
+    Gaussian2D gaussian2d(pixelWidth / 6.0f);
+
     for (int y = startingHeight; y < endingHeight; y++)
     {
         for (int x = 0; x < width; x++)
         {
-            Vec3i color = renderer->RenderPixel(x, y, *cam);
+            Vec3f color{0.0f,0.0f,0.0f};
+            if(isMultisampling)
+            {
+                // send samplerPerPixel rays thru each pixel, determine sample locations using:
+                // Stratified Random Sampling.
 
-            int imgIdx = 3 * (x + y * width);
-            image[imgIdx] = color.x;
-            image[imgIdx+1] = color.y;
-            image[imgIdx+2] = color.z;
+                int i = 0;
+                for(int r = 0; r < nRows-1; r++){
+                    for(int col = 0; col < nRows-1; col++){
+                        float psi1 = gNURandomDistribution(gRandomGenerator);
+                        float psi2 = gNURandomDistribution(gRandomGenerator);
+                        samples[i].x = x + ((col+psi1) / nRows);
+                        samples[i].y = y + ((r+psi2) / nRows);
+                        i++;
+                    }
+                }
+
+                
+                // apply 2D gaussian filter.
+                float sumOfWeights = 0.0f;
+                for(i = 0; i < samplesPerPixel; i++)
+                {
+                    Vec3f col = renderer->RenderPixel(samples[i].x, samples[i].y, *cam);
+
+                    float xDistFromCenter = samples[i].x - x;
+                    float yDistFromCenter = samples[i].y - y;
+
+                    // get gaussian weigth for this one.
+                    float gWeight = gaussian2d.GetWeight(xDistFromCenter,yDistFromCenter);
+                    color.x += col.x * gWeight;
+                    color.y += col.y * gWeight;
+                    color.z += col.z * gWeight;
+                    sumOfWeights += gWeight;
+                }
+                color.x = color.x / sumOfWeights;
+                color.y = color.y / sumOfWeights;
+                color.z = color.z / sumOfWeights;
+            }
+            else
+            {
+                color = renderer->RenderPixel(x, y, *cam);
+            }
+
+            // TODO: apply a tonemapping operator instead of simple clamping.
+            Vec3i finalColor = clamp(color);
+
+            uint32_t imgIdx = 3 * (x + y * width);
+            image[imgIdx] = finalColor.x;
+            image[imgIdx+1] = finalColor.y;
+            image[imgIdx+2] = finalColor.z;
         }
     }
+
+    delete[] samples;
 }
 
 int main(int argc, char* argv[])
 {
     // Sample usage for reading an XML scene file
     DorkTracer::Scene scene;
-
+    
     scene.loadFromXml(argv[1]);
-
-    DorkTracer::Raytracer renderer(scene);
-
     auto start = std::chrono::steady_clock::now();
 
+    DorkTracer::Raytracer renderer(scene);
+    
     for(int i = 0; i < scene.cameras.size(); i++)
     {
         DorkTracer::Camera& cam = scene.cameras[i];

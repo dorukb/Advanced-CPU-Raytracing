@@ -121,6 +121,16 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             stream >> nearPlane.x >> nearPlane.y >> nearPlane.z >> nearPlane.w;
             camera.SetupDefault(camPos, gazeDir, upDir, nearPlane, nearDist, width, height, imageName);
         }
+        
+        int numSamples = 1;
+        child = element->FirstChildElement("NumSamples");
+        if(child != nullptr){
+            stream << child->GetText() << std::endl;
+            stream >> numSamples;
+        }
+        camera.samplesPerPixel = numSamples;
+        std::cout << "Num samples: " <<camera.samplesPerPixel << std::endl;
+
         cameras.push_back(camera);
         element = element->NextSiblingElement("Camera");
     }
@@ -228,6 +238,16 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         }
         else{
             material.phong_exponent = 1.0f;
+        }
+
+        child = element->FirstChildElement("Roughness");
+        if( child != NULL)
+        {
+            stream << child->GetText() << std::endl;
+            stream >> material.roughness;
+        }
+        else{
+            material.roughness = 0.0f;
         }
 
 
@@ -651,10 +671,10 @@ void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, std::string tr
             mesh->transform = rot * mesh->transform;
         }
         else if(str[idx] == 't'){
+
             int id = int(str[idx+1]-'0');
             Vec3f translation = this->translations[id-1];
-
-            // std::cout<<"t"<<id<<" applied."<<std::endl;
+            
             Matrix t = Matrix::GetTranslation(translation.x, translation.y , translation.z);
             Matrix invT = Matrix::GetTranslation(-translation.x, -translation.y , -translation.z);
             

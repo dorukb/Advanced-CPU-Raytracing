@@ -28,6 +28,7 @@ namespace DorkTracer{
         float refractiveIndex;
         Vec3f absorptionCoefficient;
         float conductorAbsorptionIndex;
+        float roughness;
 
     private:
         

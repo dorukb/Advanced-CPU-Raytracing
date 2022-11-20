@@ -17,6 +17,7 @@ namespace DorkTracer
             float nearDist;
             int imageWidth;
             int imageHeight;
+            int samplesPerPixel;
             std::string imageName;
             
             void SetupDefault(Vec3f pos, Vec3f gazeDir, Vec3f upDir, Vec4f nearPlane, float nearDist, int width, int height, std::string imageName);

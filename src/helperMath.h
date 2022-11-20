@@ -33,6 +33,10 @@ struct Vec3i
     int x, y, z;
 };
 
+struct Vec2f{
+    float x,y;
+};
+
 struct Vec4f
 {
     float x, y, z, w;
@@ -58,8 +62,10 @@ Vec3f operator*(const Vec3f& v1, const Vec3f& v2);
 Vec3f operator*(const Vec3f& v1, float scaler);
 Vec3f operator/(const Vec3f& v1, float scaler);
 
+Vec3i operator/(const Vec3i& v1, float scaler);
 Vec3i clamp(Vec3f rgb);
 int clamp(int x);
+void GetOrthonormalBasis(Vec3f r, Vec3f& u, Vec3f& v);
 
 #endif // __helper_h__
 

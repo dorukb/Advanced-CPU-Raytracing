@@ -43,10 +43,46 @@ Vec3f operator/(const Vec3f& v1, float scaler){
     return result;
 }
 
+Vec3i operator/(const Vec3i& v1, float scaler)
+{
+    Vec3i result;
+    result.x = v1.x / scaler;
+    result.y = v1.y / scaler;
+    result.z = v1.z / scaler;
+    return result;
+}
+
 float dot(const Vec3f &a, const Vec3f &b)
 {
     float result = a.x*b.x + a.y*b.y + a.z*b.z;
     return result;
+}
+void GetOrthonormalBasis(Vec3f r, Vec3f& u, Vec3f& v)
+{   
+    float absX = abs(r.x);
+    float absY = abs(r.y);
+    float absZ = abs(r.z);
+
+    Vec3f rPrime = r;
+
+    if(absX < absY){
+        if(absX < absZ){
+            rPrime.x = 1.0f;
+        }
+        else{
+            rPrime.z = 1.0f;
+        }
+    }
+    else{
+        if(absY < absZ){
+            rPrime.y = 1.0f;
+        }
+        else{
+            rPrime.z = 1.0f;
+        }
+    }
+    u = makeUnit(cross(r, rPrime));
+    v = makeUnit(cross(r, u));
 }
 
 Vec3f cross(const Vec3f &first, const Vec3f &second){

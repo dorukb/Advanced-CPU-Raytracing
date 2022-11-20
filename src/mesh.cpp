@@ -154,12 +154,9 @@ bool DorkTracer::Mesh::Intersect(Ray& ray)
     // Transform the ray into our local space.
     Vec3f rayOriginCache = ray.origin;
     Vec3f rayDirCache = ray.dir;
-
-    Vec4f rayOrigin(ray.origin, 1.0f);
-    Vec4f rayDir(ray.dir, 0.0f);
     
-    ray.origin = Matrix::ApplyTransform(this->inverseTransform, rayOrigin);
-    ray.dir = Matrix::ApplyTransform(this->inverseTransform, rayDir);
+    ray.origin = Matrix::ApplyTransformToPoint(this->inverseTransform, ray.origin);
+    ray.dir = Matrix::ApplyTransformToVector(this->inverseTransform, ray.dir);
 
     // note that BVH intersection test actually hinders BFC perf gain.
     // BFC actually slows down the computation.
