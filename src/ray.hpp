@@ -3,20 +3,28 @@
 
 #include "helperMath.h"
 
-namespace DorkTracer{
+namespace DorkTracer
+{
     
-    struct HitInfo{
+    struct HitInfo
+    {
         bool hasHit;
+        int matId;
+
         float minT;
         Vec3f normal;
-        int matId;
+        Vec3f hitPoint;
     };
 
-    struct Ray{
+    struct Ray
+    {
         Vec3f origin;
         Vec3f dir;
         HitInfo hitInfo;
         float refractiveIndexOfCurrentMedium;
+
+        float motionBlurTime;
+        float lightSampleX, lightSampleY;
     };
 }
 

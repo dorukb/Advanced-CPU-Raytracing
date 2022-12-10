@@ -36,11 +36,12 @@ void renderThreadMain(RenderThreadArgs args)
     int samplesPerPixel = cam->samplesPerPixel;
     bool isMultisampling = samplesPerPixel > 1;
     int nRows = std::sqrt(samplesPerPixel);
+    int nCols = nRows;
 
-    Vec2f* samples = new Vec2f[samplesPerPixel];
+    std::vector<Vec2f> samples(samplesPerPixel);
 
-    std::mt19937 gRandomGenerator;
-    std::uniform_real_distribution<> gNURandomDistribution(0, 1);
+    std::mt19937 randomGen(rand());
+    std::uniform_real_distribution<> uniform01(0.0f, 1.0f);
 
     float pixelWidth = 1.0f;
     Gaussian2D gaussian2d(pixelWidth / 6.0f);
@@ -56,12 +57,14 @@ void renderThreadMain(RenderThreadArgs args)
                 // Stratified Random Sampling.
 
                 int i = 0;
-                for(int r = 0; r < nRows-1; r++){
-                    for(int col = 0; col < nRows-1; col++){
-                        float psi1 = gNURandomDistribution(gRandomGenerator);
-                        float psi2 = gNURandomDistribution(gRandomGenerator);
-                        samples[i].x = x + ((col+psi1) / nRows);
-                        samples[i].y = y + ((r+psi2) / nRows);
+                for(int row = 0; row < nRows; row++)
+                {
+                    for(int col = 0; col < nCols; col++)
+                    {
+                        float psi1 = uniform01(randomGen);
+                        float psi2 = uniform01(randomGen);
+                        samples[i].x = (col+psi1) / nCols;
+                        samples[i].y = (row+psi2) / nRows;
                         i++;
                     }
                 }
@@ -71,12 +74,15 @@ void renderThreadMain(RenderThreadArgs args)
                 float sumOfWeights = 0.0f;
                 for(i = 0; i < samplesPerPixel; i++)
                 {
-                    Vec3f col = renderer->RenderPixel(samples[i].x, samples[i].y, *cam);
+                    Vec3f col = renderer->RenderPixel(samples[i].x + x, samples[i].y + y, *cam);
 
-                    float xDistFromCenter = samples[i].x - x;
-                    float yDistFromCenter = samples[i].y - y;
+                    float xDistFromCenter = samples[i].x - 0.5f;
+                    float yDistFromCenter = samples[i].y - 0.5f;
 
-                    // get gaussian weigth for this one.
+                    assert(xDistFromCenter > -0.50001f && xDistFromCenter < 0.5001f);
+                    assert(yDistFromCenter > -0.50001f && yDistFromCenter < 0.5001f);
+
+                    // get gaussian weight for this one.
                     float gWeight = gaussian2d.GetWeight(xDistFromCenter,yDistFromCenter);
                     color.x += col.x * gWeight;
                     color.y += col.y * gWeight;
@@ -102,7 +108,6 @@ void renderThreadMain(RenderThreadArgs args)
         }
     }
 
-    delete[] samples;
 }
 
 int main(int argc, char* argv[])

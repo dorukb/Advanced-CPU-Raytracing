@@ -1,5 +1,6 @@
 #include "mesh.hpp"
 #include <iostream>
+#include <random>
 
 using namespace DorkTracer;
 
@@ -158,16 +159,19 @@ bool DorkTracer::Mesh::Intersect(Ray& ray)
     ray.origin = Matrix::ApplyTransformToPoint(this->inverseTransform, ray.origin);
     ray.dir = Matrix::ApplyTransformToVector(this->inverseTransform, ray.dir);
 
-    // note that BVH intersection test actually hinders BFC perf gain.
-    // BFC actually slows down the computation.
-    // observed 15.5s NO bfc, 16.7s YES bfc.
+    if(this->hasMotionBlur)
+    {
+        ray.origin = ray.origin + motionBlurVector * ray.motionBlurTime;
+    }
+
     if(this->bbox.doesIntersectWith(ray)){
         bool hasHit = this->bvh[0].IntersectBVH(ray, *(this));
         // undo origin&dir changes to local space.
         ray.origin = rayOriginCache;
         ray.dir = rayDirCache;
         if(hasHit){
-            ray.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(ray.hitInfo.normal, 0.0f)));
+            ray.hitInfo.hitPoint = ray.origin + ray.dir *ray.hitInfo.minT;
+            ray.hitInfo.normal = makeUnit(Matrix::ApplyTransformToVector(this->inverseTransposeTransform, ray.hitInfo.normal));
         }
         return hasHit;
     }
@@ -194,6 +198,8 @@ bool DorkTracer::Mesh::IntersectFace(Ray& ray, Face& face)
         ray.hitInfo.minT = newT;
         ray.hitInfo.hasHit = true;
         ray.hitInfo.normal = face.n;
+        
+        ray.hitInfo.hitPoint = ray.origin + ray.dir * ray.hitInfo.minT;
         // ray.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(face.n, 0.0f)));
 
         ray.hitInfo.matId = this->GetMaterial();

@@ -26,6 +26,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         throw std::runtime_error("Error: Root is not found.");
     }
 
+    this->isMotionBlurEnabled = false;
+
     //Get BackgroundColor
     auto element = root->FirstChildElement("BackgroundColor");
     if (element)
@@ -43,12 +45,12 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     if (element)
     {
         stream << element->GetText() << std::endl;
+        stream >> Scene::shadow_ray_epsilon;
     }
     else
     {
-        stream << "0.001" << std::endl;
+        Scene::shadow_ray_epsilon = 0.001;
     }
-    stream >> shadow_ray_epsilon;
 
     //Get MaxRecursionDepth
     element = root->FirstChildElement("MaxRecursionDepth");
@@ -131,6 +133,25 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         camera.samplesPerPixel = numSamples;
         std::cout << "Num samples: " <<camera.samplesPerPixel << std::endl;
 
+
+        float focusDistance = 0.0f;
+        child = element->FirstChildElement("FocusDistance");
+        if(child != nullptr){
+            stream << child->GetText() << std::endl;
+            stream >> focusDistance;
+        }
+        camera.focusDistance = focusDistance;
+
+
+        float apertureSize = 0.0f;
+        child = element->FirstChildElement("ApertureSize");
+        if(child != nullptr){
+            stream << child->GetText() << std::endl;
+            stream >> apertureSize;
+        }
+        camera.apertureSize = apertureSize;
+
+
         cameras.push_back(camera);
         element = element->NextSiblingElement("Camera");
     }
@@ -155,6 +176,39 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         point_lights.push_back(point_light);
         element = element->NextSiblingElement("PointLight");
     }
+
+    element = root->FirstChildElement("Lights");
+    element = element->FirstChildElement("AreaLight");
+    while (element)
+    {
+        Vec3f pos,normal, radiance;
+        float size;
+        int id;
+        
+        stream << element->Attribute("id") << std::endl;
+        stream >> id;
+        
+        child = element->FirstChildElement("Position");
+        stream << child->GetText() << std::endl;
+        stream >> pos.x >> pos.y >> pos.z;
+
+        child = element->FirstChildElement("Normal");
+        stream << child->GetText() << std::endl;
+        stream >> normal.x >> normal.y >> normal.z;
+        
+        child = element->FirstChildElement("Radiance");
+        stream << child->GetText() << std::endl;
+        stream >> radiance.x >> radiance.y >> radiance.z;
+
+        child = element->FirstChildElement("Size");
+        stream << child->GetText() << std::endl;
+        stream >> size;
+
+        areaLights.push_back(new AreaLight(id, pos, normal, radiance, size));
+
+        element = element->NextSiblingElement("AreaLight");
+    }
+
 
     // Get Materials
     element = root->FirstChildElement("Materials");
@@ -216,6 +270,11 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         if( child != NULL){
             stream << child->GetText() << std::endl;
             stream >> material.absorptionCoefficient.x >>  material.absorptionCoefficient.y >> material.absorptionCoefficient.z;
+            // if(material.absorptionCoefficient.y <= 0.0){
+            //     std::cout<<"add some\n";
+            //     material.absorptionCoefficient.y += 0.01;
+            //     std::cout<<"y is:\n" << material.absorptionCoefficient.y;
+            // }
         }else
         {
             material.absorptionCoefficient = Vec3f{0,0,0};
@@ -363,6 +422,23 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         stream >> matId;
         mesh->SetMaterial(matId);
 
+        // parse motion blur
+        // <MotionBlur>0 0 4</MotionBlur>
+        child = element->FirstChildElement("MotionBlur");
+        if(child != nullptr)
+        {
+            stream << child->GetText() << std::endl;
+            stream >> mesh->motionBlurVector.x >> mesh->motionBlurVector.y >> mesh->motionBlurVector.z;
+
+            mesh->hasMotionBlur = true;
+            // enable motior blur globally even if only one object is using it.
+            this->isMotionBlurEnabled = true; 
+        }
+        else{
+            mesh->hasMotionBlur = false;
+            mesh->motionBlurVector = Vec3f(0.0f,0.0f,0.0f);
+        }
+
         child = element->FirstChildElement("Faces");
 
         BoundingBox bbox;
@@ -438,6 +514,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             }
         }
 
+
+
         stream.clear();
 
         mesh->bbox = bbox;
@@ -500,6 +578,23 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         }
         else{
             meshInstance->SetMaterial(baseMesh->GetMaterial());
+        }  
+        // parse motion blur
+        // <MotionBlur>0 0 4</MotionBlur>
+        child = element->FirstChildElement("MotionBlur");
+        if(child != nullptr)
+        {
+            stream << child->GetText() << std::endl;
+            stream >> meshInstance->motionBlurVector.x >> meshInstance->motionBlurVector.y >> meshInstance->motionBlurVector.z;
+
+            // enable motior blur globally even if only one object is using it.
+            this->isMotionBlurEnabled = true; 
+            meshInstance->hasMotionBlur = true;
+        }
+        else
+        {
+            meshInstance->hasMotionBlur = false;
+            meshInstance->motionBlurVector = Vec3f(0.0f,0.0f,0.0f);
         }
 
         // Get transformations
@@ -610,6 +705,24 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         child = element->FirstChildElement("Radius");
         stream << child->GetText() << std::endl;
         stream >> sphere->radius;
+
+
+        // parse motion blur
+        child = element->FirstChildElement("MotionBlur");
+        if(child != nullptr)
+        {
+            stream << child->GetText() << std::endl;
+            stream >> sphere->motionBlurVector.x >> sphere->motionBlurVector.y >> sphere->motionBlurVector.z;
+
+            sphere->hasMotionBlur = true;
+            // enable motior blur globally even if only one object is using it.
+            this->isMotionBlurEnabled = true; 
+        }
+        else{
+            sphere->hasMotionBlur = false;
+            sphere->motionBlurVector = Vec3f(0.0f,0.0f,0.0f);
+        }
+
 
         spheres.push_back(sphere);
         element = element->NextSiblingElement("Sphere");

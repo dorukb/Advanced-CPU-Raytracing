@@ -1,10 +1,11 @@
 #ifndef __DORKTRACER_SHAPE__
 #define __DORKTRACER_SHAPE__
 
+#include <vector>
+#include <random>
 
 #include "ray.hpp"
 #include "material.hpp"
-#include <vector>
 #include "matrix.hpp"
 
 namespace DorkTracer{
@@ -19,10 +20,24 @@ namespace DorkTracer{
         Matrix inverseTransform;
         Matrix inverseTransposeTransform;
 
-        Shape() : transform(4,4), inverseTransform(4,4), inverseTransposeTransform(4,4){}
+        bool hasMotionBlur = false;
+        Vec3f motionBlurVector;
+        std::mt19937 motionBlurRandomGenerator;
+        std::uniform_real_distribution<> motionBlurRandomDistro01;
+
+        Shape() : transform(4,4), inverseTransform(4,4), inverseTransposeTransform(4,4)
+        {
+            this->motionBlurVector = Vec3f();
+            this->motionBlurRandomGenerator = std::mt19937();
+            this->motionBlurRandomDistro01 = std::uniform_real_distribution<>(0.0f, 1.0f);
+        }
 
         virtual bool Intersect(Ray&){return false;};
-
+        
+        float GetRandom01MotionBlurTime()
+        {
+            return this->motionBlurRandomDistro01(this->motionBlurRandomGenerator);
+        }
     };
 
     struct BoundingBox

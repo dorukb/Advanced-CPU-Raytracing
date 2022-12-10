@@ -4,9 +4,28 @@
 #include <math.h>
 #include <stdint.h>
 
+struct Vec3i
+{
+    int x, y, z;
+};
 struct Vec3f
 {
     float x, y, z;
+    Vec3f(){
+        x = y = z = 0.0f;
+    };
+    Vec3f(Vec3i v){
+        x = v.x;
+        y = v.y;
+        z = v.z;
+    };
+    
+    Vec3f(float x, float y, float z){
+        this->x = x;
+        this->y = y;
+        this->z = z;
+    };
+
     Vec3f operator-() const {
         Vec3f result;
         result.x = x * -1.0f;
@@ -28,10 +47,6 @@ struct Vec3f
     }
 };
 
-struct Vec3i
-{
-    int x, y, z;
-};
 
 struct Vec2f{
     float x,y;

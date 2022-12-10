@@ -62,12 +62,12 @@ void Camera::CalculateImagePlaneParams()
     m_middle = position + gaze * nearDist;
     
     m_w = -gaze;
-    m_rightVec = cross(up, m_w);
+    right = cross(up, m_w);
 
     // Up = v,  Gaze = −w, u = v ×w
 
     m_middle = position + gaze * nearDist;
-    m_q = m_middle + m_rightVec * m_left + up * m_top;
+    m_q = m_middle + right * m_left + up * m_top;
 }
 
 Vec3f Camera::GetImagePlanePosition(int width, int height)
@@ -75,5 +75,5 @@ Vec3f Camera::GetImagePlanePosition(int width, int height)
     float su = (width + 0.5) * (m_right - m_left) / imageWidth;
     float sv = (height + 0.5) * (m_top- m_bottom) / imageHeight;
 
-    return m_q + m_rightVec * su + up *-sv;
+    return m_q + right * su + up *-sv;
 }

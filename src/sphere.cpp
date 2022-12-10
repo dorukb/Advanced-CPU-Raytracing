@@ -72,6 +72,7 @@ bool DorkTracer::Sphere::Intersect(Ray& r){
             r.hitInfo.hasHit = true;
             // calculate sphere normal at hit point
             Vec3f worldHitPoint = r.origin + r.dir * t;
+            r.hitInfo.hitPoint = worldHitPoint;
 
             r.hitInfo.normal = makeUnit(localhitPoint - center);
             r.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(r.hitInfo.normal, 0.0f)));

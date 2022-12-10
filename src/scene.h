@@ -10,9 +10,11 @@
 #include "shape.hpp"
 #include "sphere.hpp"
 #include "tinyxml2.h"
+#include "areaLight.h"
 
 
 namespace DorkTracer{
+
 
     struct PointLight
     {
@@ -20,15 +22,20 @@ namespace DorkTracer{
         Vec3f intensity;
     };
 
-    struct Scene
+    class Scene
     {
+        
+    public:
+        static float shadow_ray_epsilon;
 
         Vec3i background_color;
-        float shadow_ray_epsilon;
         int max_recursion_depth;
-        std::vector<Camera> cameras;
+        bool isMotionBlurEnabled;
         Vec3f ambient_light;
+
+        std::vector<Camera> cameras;
         std::vector<PointLight> point_lights;
+        std::vector<AreaLight*> areaLights;
         std::vector<Material> materials;
         std::vector<Vec3f> vertex_data;
         std::vector<Shape*> meshes;

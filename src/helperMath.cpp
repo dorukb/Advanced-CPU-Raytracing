@@ -81,7 +81,7 @@ void GetOrthonormalBasis(Vec3f r, Vec3f& u, Vec3f& v)
             rPrime.z = 1.0f;
         }
     }
-    u = makeUnit(cross(r, rPrime));
+    u = makeUnit(cross(rPrime, r));
     v = makeUnit(cross(r, u));
 }
 

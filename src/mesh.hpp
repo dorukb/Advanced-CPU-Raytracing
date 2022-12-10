@@ -4,6 +4,7 @@
 #include "shape.hpp"
 #include <vector>
 #include "bvh.hpp"
+#include <random>
 
 namespace DorkTracer{
 
