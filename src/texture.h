@@ -1,19 +1,10 @@
+#ifndef __DORKTRACER_TEXTURE__
+#define __DORKTRACER_TEXTURE__
+
+#include "helperMath.h"
+
 namespace DorkTracer
 { 
-    
-    enum class Textures
-    {
-        Diffuse,
-        Bump,
-        Normal,
-    };
-
-    enum class Interpolation
-    {
-        Nearest_Neighbor,
-        Bilinear,
-    };
-
     enum class DecalMode
     {
         Replace_kd,
@@ -30,15 +21,67 @@ namespace DorkTracer
     {
    
     public:
-        Textures type;
+        enum OperationMode
+        {
+            Blend,
+            Replace
+        } operationMode;
+
+        enum class Textures
+        {
+            Diffuse,
+            Specular,
+            Bump,
+            Normal,
+            DiffSpecAmb, // replace_all mode.
+        } type;
+
         int id;
 
-        Texture(Textures type)
+        Texture(int texId, std::string mode)
         {
-            this->type = type;
+            this->id = texId;
+            SetOperationMode(mode);
+            SetTextureType(mode);
         };
         
-    };
+        virtual Vec3f GetSample(float u, float v) = 0;
 
-  
+    private:
+        void SetTextureType(std::string mode)
+        {
+            if(mode == "replace_kd" || mode == "blend_kd")
+            {
+                type = Textures::Diffuse;
+            }
+            else if(mode == "replace_ks")
+            {
+                type = Textures::Specular;
+            }   
+            else if(mode == "replace_normal")
+            {
+                type = Textures::Normal;
+            }
+            else if(mode == "bump_normal")
+            {
+                type = Textures::Bump;
+            }
+            else if(mode == "replace_all")
+            {
+                type = Textures::DiffSpecAmb;
+            }
+        };
+
+        void SetOperationMode(std::string& mode)
+        {
+            if(mode == "blend_kd"){
+                operationMode = OperationMode::Blend;
+            }
+            else{
+                operationMode = OperationMode::Replace;
+            }
+        }
+    };
 }
+
+#endif

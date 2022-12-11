@@ -159,8 +159,13 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     //Get Lights
     element = root->FirstChildElement("Lights");
     auto child = element->FirstChildElement("AmbientLight");
-    stream << child->GetText() << std::endl;
-    stream >> ambient_light.x >> ambient_light.y >> ambient_light.z;
+    if(child){
+        stream << child->GetText() << std::endl;
+        stream >> ambient_light.x >> ambient_light.y >> ambient_light.z;
+    }
+    else{
+        ambient_light = {0,0,0};
+    }
     element = element->FirstChildElement("PointLight");
     PointLight point_light;
     while (element)
@@ -316,6 +321,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
 
     // Get Textures
+    this->bgTexture = nullptr;
     element = root->FirstChildElement("Textures");
     if(element)
     {
@@ -336,12 +342,104 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 this->images.push_back(image);
 
                 
-                element = element->FirstChildElement("Image");
+                element = element->NextSiblingElement("Image");
             }
         }
 
         // Load texture maps if any
-     
+        element = root->FirstChildElement("Textures");
+        element = element->FirstChildElement("TextureMap");
+
+        while(element)
+        {
+            int textureId;
+            stream << element->Attribute("id") << std::endl;
+            stream >> textureId;
+
+            std::string textureType;
+            stream << element->Attribute("type") << std::endl;
+            stream >> textureType;
+
+            // The only property all textures share is the decal mode or apply mode.
+            child = element->FirstChildElement("DecalMode");
+            std::string decalMode;
+            stream << child->GetText() << std::endl;
+            stream >> decalMode;
+            
+            if(textureType == "image")
+            {
+                int imageId;
+                child = element->FirstChildElement("ImageId");
+                stream << child->GetText() << std::endl;
+                stream >> imageId;
+                
+                child = element->FirstChildElement("Interpolation");
+                std::string interpMode = "bilinear";
+                if(child){
+                    stream << child->GetText() << std::endl;
+                    stream >> interpMode;
+                }
+
+                float normalizer = 1.0f;
+                child = element->FirstChildElement("Normalizer");
+                if(child){
+                    stream << child->GetText() << std::endl;
+                    stream >> normalizer;
+                }
+
+                Image* img = nullptr;
+                for(int i = 0; i < this->images.size(); i++){
+                    if(images[i]->id == imageId){
+                        img = images[i];
+                        break;
+                    }
+                }
+                if(img == nullptr){
+                    std::cout << "Couldnt get image with id: " + imageId << std::endl; 
+                }
+
+                ImageTexture* tex = new ImageTexture(textureId, decalMode, interpMode, img);
+                this->textures.push_back(tex);
+
+                if(decalMode == "replace_background")
+                {
+                    this->bgTexture = tex;
+                    std::cout << "set the background texture." << std::endl;
+                }
+            }
+            else if(textureType == "perlin")
+            {
+                std::string noiseConversion = "linear";
+                child = element->FirstChildElement("NoiseConversion");
+                if(child){
+                    stream << child->GetText() << std::endl;
+                    stream >> noiseConversion;
+                }
+
+                float noiseScale = 1.0f;
+                child = element->FirstChildElement("NoiseScale");
+                if(child){
+                    stream << child->GetText() << std::endl;
+                    stream >> noiseScale;
+                }
+
+                PerlinTexture* tex = new PerlinTexture(textureId, decalMode, noiseScale, noiseConversion);
+                this->textures.push_back(tex);
+
+                if(decalMode == "replace_background")
+                {
+                    this->bgTexture = tex;
+                    std::cout << "set the background texture." << std::endl;
+                }
+            }
+            else if(textureType == "checkerboard")
+            {
+                // TODO: implement procedural checkboard texture.
+                std::cout << "procedural checkerboard texture is not implemented yet." << std::endl;
+            }
+
+            element = element->NextSiblingElement("TextureMap");
+        }
     }
 
 
@@ -353,6 +451,17 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     {
         stream >> vertex.y >> vertex.z;
         vertex_data.push_back(vertex);
+    }
+    stream.clear();
+
+    // Get TexCoordData (u,v)
+    element = root->FirstChildElement("TexCoordData");
+    stream << element->GetText() << std::endl;
+    Vec2f texCoord;
+    while (!(stream >> texCoord.x).eof())
+    {
+        stream >> texCoord.y;
+        texCoords.push_back(texCoord);
     }
     stream.clear();
 
@@ -423,16 +532,25 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         if(hasPlyData)
         {
             std::vector<Vec3f> meshVertices;
-            mesh = new DorkTracer::Mesh(meshVertices);
+            std::vector<Vec2f> meshUV;
+            mesh = new DorkTracer::Mesh(meshVertices, meshUV);
         }
         else{
-            mesh = new DorkTracer::Mesh(this->vertex_data);
+            mesh = new DorkTracer::Mesh(this->vertex_data, this->texCoords);
         }
         mesh->isInstance = false;
 
         stream << element->Attribute("id") << std::endl;
         stream >> mesh->id;
 
+        // Setup textures
+        child = element->FirstChildElement("Textures");
+        if(child){
+            std::string texturesInp;
+            texturesInp = child->GetText();
+            texturesInp += " ";
+            SetupTextures(mesh, texturesInp);
+        }
         // Compute Model, invModel and invTransModel matrices from given transformations.
         child = element->FirstChildElement("Transformations");
 
@@ -493,6 +611,9 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             }
             vPos.clear();
 
+            for(auto str : plyIn.getElementNames()){
+                std::cout << str << std::endl;
+            }
             std::vector<std::vector<int>> fInd = plyIn.getFaceIndices<int>();
             std::cout<<"has: "<<  fInd.size() << " faces and "<< mesh->vertices.size() << " vertices."<< std::endl;
             for(int i = 0; i < fInd.size(); i++){
@@ -599,6 +720,15 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         meshInstance->id = ownId;
         meshInstance->isInstance = true;
 
+
+        // Setup textures
+        child = element->FirstChildElement("Textures");
+        if(child){
+            std::string texturesInp = child->GetText();
+            texturesInp += " ";
+            SetupTextures(meshInstance, texturesInp);
+        }
+
         // Get material
         child = element->FirstChildElement("Material");
         if(child != nullptr){
@@ -663,7 +793,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     
     while (element)
     {
-        DorkTracer::Mesh* mesh = new DorkTracer::Mesh(this->vertex_data);
+        DorkTracer::Mesh* mesh = new DorkTracer::Mesh(this->vertex_data, this->texCoords);
 
         // Compute Model, invModel and invTransModel matrices from given transformations.
         child = element->FirstChildElement("Transformations");
@@ -677,6 +807,15 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             mesh->inverseTransform.MakeIdentity();
             mesh->inverseTransposeTransform.MakeIdentity();
         }
+        
+        // Setup textures
+        child = element->FirstChildElement("Textures");
+        if(child){
+            std::string texturesInp = child->GetText();
+            texturesInp += " ";
+            SetupTextures(mesh, texturesInp);
+        }
+
 
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
@@ -724,6 +863,13 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             sphere->inverseTransposeTransform.MakeIdentity();
         }
 
+        // Setup textures
+        child = element->FirstChildElement("Textures");
+        if(child){
+            std::string texturesInp = child->GetText();
+            texturesInp += " ";
+            SetupTextures(sphere, texturesInp);
+        }
 
         child = element->FirstChildElement("Material");
         stream << child->GetText() << std::endl;
@@ -778,6 +924,46 @@ void DorkTracer::Scene::computeFaceCenter(DorkTracer::Face& face, std::vector<Ve
     face.center = (a+b+c)/3;
 }
 
+void DorkTracer::Scene::SetupTextures(DorkTracer::Shape* shape, std::string& texIds)
+{
+    size_t last = 0; 
+    size_t next = 0;
+    while ((next = texIds.find(" ", last)) != std::string::npos) 
+    {   
+        auto idStr = texIds.substr(last, next-last);
+        int id = stoi(idStr);
+
+        Texture* texture = nullptr;
+        for(int i = 0; i < this->textures.size(); i++){
+            if(textures[i]->id == id){
+                texture = textures[i];
+                break;
+            }
+        }
+        
+        switch(texture->type){
+            case Texture::Textures::Diffuse:
+                shape->diffuseTex = texture;
+                break;
+            case Texture::Textures::Specular:
+                shape->specularTex = texture;
+                break;
+            case Texture::Textures::DiffSpecAmb:
+                shape->diffuseTex = texture;
+                shape->specularTex = texture;
+                shape->ambientTex = texture;
+                break;
+            case Texture::Textures::Normal:
+                shape->normalMap = texture;
+                break;
+            case Texture::Textures::Bump:
+                shape->bumpMap = texture;
+                break;
+        };
+
+        last = next + 1; 
+    }
+}
 void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, std::string transformationInput)
 {
     // sample input: <Transformations>s2 s3 r2 t2</Transformations>

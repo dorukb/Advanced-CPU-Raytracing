@@ -7,6 +7,15 @@
 struct Vec3i
 {
     int x, y, z;
+    Vec3i(){
+        x = y = z = 0;
+    }
+    Vec3i(int x, int y, int z)
+    {
+        this->x = x;
+        this->y = y;
+        this->z = z;
+    }
 };
 struct Vec3f
 {

@@ -31,7 +31,7 @@ namespace DorkTracer
         void IntersectObjects(Ray& ray);
 
         Vec3f GetAmbient(Vec3f& reflectance, Vec3f& ambientLightColor);
-        Vec3f GetDiffuse(Vec3f& reflectance, Vec3f& w_i, Vec3f& normal, Vec3f& receivedIrradiance);
+        Vec3f GetDiffuse(Shape* shape, Vec3f& reflectance, Vec3f& w_i, Ray& ray, Vec3f& receivedIrradiance);
         Vec3f GetSpecular(Vec3f& reflectance, float phongExp, Vec3f& w_in, Vec3f& w_out, Vec3f& normal, Vec3f& receivedIrradiance);
         bool IsInShadow(Ray& ray, Vec3f& lightPos);
 

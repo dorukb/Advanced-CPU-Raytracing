@@ -53,6 +53,7 @@ bool DorkTracer::InstancedMesh::Intersect(Ray& ray)
             // remember to change this to our id. otherwise baseMesh material will be used for shading.
             ray.hitInfo.hitPoint = rayOriginCache + rayDirCache * ray.hitInfo.minT;
             ray.hitInfo.matId = this->material_id;
+            ray.hitInfo.hitShape = this;
             ray.hitInfo.normal = makeUnit(Matrix::ApplyTransformToVector(this->inverseTransposeTransform, ray.hitInfo.normal));
         }
         

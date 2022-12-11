@@ -38,6 +38,14 @@ Vec3f Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
     {
        return PerformShading(ray, cam.position, scene.max_recursion_depth);
     }
+    else if(scene.bgTexture != nullptr)
+    {
+        // sample the bg texture.
+        float u= coordX / (float)cam.imageWidth;
+        float v = coordY / (float)cam.imageHeight;
+        Vec3f sampledColor = scene.bgTexture->GetSample(u, v);
+        return sampledColor;
+    }
     else return Vec3f(scene.background_color.x, scene.background_color.y, scene.background_color.z);
 }
 
@@ -48,6 +56,8 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
 
     Vec3f color{0,0,0};
     Material& mat = scene.materials[ray.hitInfo.matId-1];
+    Shape* shape = ray.hitInfo.hitShape;
+
     Vec3f w_o = makeUnit(eyePos - ray.hitInfo.hitPoint);
     float refractiveIndexOfVacuum = 1.00001;
     bool travellingInsideAnObject = ray.refractiveIndexOfCurrentMedium > refractiveIndexOfVacuum;
@@ -69,7 +79,7 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
             float distToLight = len(light.position - ray.hitInfo.hitPoint);
             Vec3f receivedIrradiance = light.intensity / (distToLight * distToLight);
 
-            color = color + GetDiffuse(mat.diffuse, w_in, ray.hitInfo.normal, receivedIrradiance);
+            color = color + GetDiffuse(shape, mat.diffuse, w_in, ray, receivedIrradiance);
             color = color + GetSpecular(mat.specular, mat.phong_exponent, w_in, w_o, ray.hitInfo.normal, receivedIrradiance);
         }    
 
@@ -95,8 +105,8 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
                 lCostheta = dot(areaLight->normal, w_i);
             }
             Vec3f receivedIrradiance = areaLight->radiance * (areaLight->area * lCostheta / dSqr);
-
-            color = color + GetDiffuse(mat.diffuse, w_i, ray.hitInfo.normal, receivedIrradiance);
+          
+            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
             color = color + GetSpecular(mat.specular, mat.phong_exponent, w_i, w_o, ray.hitInfo.normal, receivedIrradiance);
         }    
     }
@@ -373,8 +383,26 @@ Vec3f Raytracer::GetAmbient(Vec3f& reflectance, Vec3f& ambientLightColor){
     return ambientLightColor * reflectance;
 }
 
-Vec3f Raytracer::GetDiffuse(Vec3f& reflectance, Vec3f& w_i, Vec3f& normal, Vec3f& receivedIrradiance){
-    float costheta = std::max(0.0f, dot(w_i, normal));
+Vec3f Raytracer::GetDiffuse(Shape* shape, Vec3f& k_d, Vec3f& w_i, Ray& ray, Vec3f& receivedIrradiance)
+{
+    Vec3f reflectance = k_d;
+    if(shape->diffuseTex != nullptr)
+    {
+        // TODO: calculate UV for hit point using vertices & texCoords.
+        // normalize, obtain k_d in [0,1] range.
+        Vec2f& uv = ray.hitInfo.hitUV;
+        Vec3f textureKd = shape->diffuseTex->GetSample(uv.x, uv.y) / 255.0f;
+        if(shape->diffuseTex->operationMode == Texture::OperationMode::Blend)
+        {
+            //Equally mix the existing material kd value with the tex sample.
+            reflectance = (textureKd + k_d) / 2.0f;
+        }
+        else // Replace/overwrite k_d with tex value
+        {
+            reflectance = textureKd;
+        }
+    }
+    float costheta = std::max(0.0f, dot(w_i, ray.hitInfo.normal));
     return reflectance * receivedIrradiance * costheta;
 }
 

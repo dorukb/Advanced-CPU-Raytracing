@@ -99,17 +99,8 @@ void renderThreadMain(RenderThreadArgs args)
                 color = renderer->RenderPixel(x, y, *cam);
             }
 
-            // TODO: apply a tonemapping operator instead of simple clamping.
+            // // TODO: apply a tonemapping operator instead of simple clamping.
             Vec3i finalColor = clamp(color);
-
-            // Test image loading & sampling
-            // #include "image.h"
-            // DorkTracer::Image* img = renderer->scene.images[0];
-            // float u = x / (float)width;
-            // float v = y / (float)height;
-            // Vec3i finalColor = img->GetSample(u,v);
-            // Test image loading & sampling
-
 
             uint32_t imgIdx = 3 * (x + y * width);
             image[imgIdx] = finalColor.x;

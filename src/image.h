@@ -12,6 +12,8 @@ namespace DorkTracer
 
     public:
         int id;
+        int width;
+        int height;
 
         Image(std::string filename, int id)
         {
@@ -19,12 +21,8 @@ namespace DorkTracer
             LoadImage(filename);
         }
 
-        Vec3i GetSample(float u, float v)
+        Vec3i GetSample(int i, int j)
         {
-            // TODO: imp bilinear.
-            int i = (int) (u * width);
-            int j = (int) (v * height);
-
             uint32_t imgIdx = channels * (i + j * width);
             
             Vec3i color;
@@ -36,8 +34,6 @@ namespace DorkTracer
         }
 
     private:
-        int width;
-        int height;
         int channels;
         unsigned char* image;
 

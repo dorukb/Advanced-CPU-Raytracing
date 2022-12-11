@@ -14,11 +14,12 @@ namespace DorkTracer{
     public:
         std::vector<Face> faces;
         std::vector<Vec3f> vertices;
+        std::vector<Vec2f> uv;
         
         BoundingBox bbox;
         std::vector<BVH> bvh;
 
-        Mesh(std::vector<Vec3f>& vertices);
+        Mesh(std::vector<Vec3f>& vertices, std::vector<Vec2f>& uv);
 
         virtual bool Intersect(Ray& ray);
         int GetMaterial();
@@ -35,7 +36,7 @@ namespace DorkTracer{
         bool IsBackface(Face& face, Vec3f& rayDir);
         void RecomputeBoundingBox(uint32_t nodeIdx);
         void RecursiveBVHBuild(uint32_t nodeIdx);
-        bool DoesIntersectTriangle(Ray& ray, Vec3f& v0, Vec3f& v1, Vec3f& v2, float& t);
+        // bool DoesIntersectTriangle(Ray& ray, Vec3f& v0, Vec3f& v1, Vec3f& v2, float& t, float currMinT);
     };
 
 }

@@ -7,6 +7,7 @@
 #include "ray.hpp"
 #include "material.hpp"
 #include "matrix.hpp"
+#include "texture.h"
 
 namespace DorkTracer{
 
@@ -24,6 +25,12 @@ namespace DorkTracer{
         Vec3f motionBlurVector;
         std::mt19937 motionBlurRandomGenerator;
         std::uniform_real_distribution<> motionBlurRandomDistro01;
+
+        Texture* diffuseTex;
+        Texture* specularTex;
+        Texture* ambientTex;
+        Texture* normalMap;
+        Texture* bumpMap;
 
         Shape() : transform(4,4), inverseTransform(4,4), inverseTransposeTransform(4,4)
         {

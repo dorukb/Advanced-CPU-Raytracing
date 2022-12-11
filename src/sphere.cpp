@@ -69,6 +69,7 @@ bool DorkTracer::Sphere::Intersect(Ray& r){
         if(t < r.hitInfo.minT && t > 0.0f){
             r.hitInfo.minT = t;
             r.hitInfo.matId = material_id;
+            r.hitInfo.hitShape = this;
             r.hitInfo.hasHit = true;
             // calculate sphere normal at hit point
             Vec3f worldHitPoint = r.origin + r.dir * t;

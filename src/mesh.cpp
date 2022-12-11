@@ -4,9 +4,10 @@
 
 using namespace DorkTracer;
 
-DorkTracer::Mesh::Mesh(std::vector<Vec3f>& vertices)
+DorkTracer::Mesh::Mesh(std::vector<Vec3f>& vertices, std::vector<Vec2f>& uv)
 {
     this->vertices = vertices;
+    this->uv = uv;
 }
 int DorkTracer::Mesh::GetMaterial(){
     return this->material_id;
@@ -190,31 +191,8 @@ bool DorkTracer::Mesh::IntersectFace(Ray& ray, Face& face)
     Vec3f& v0 = vertices[face.v0_id-1];
     Vec3f& v1 = vertices[face.v1_id-1];
     Vec3f& v2 = vertices[face.v2_id-1];
-    float newT  = 99999;
-    bool hasIntersected = DoesIntersectTriangle(ray, v0, v1, v2, newT);
+    float newT  = INFINITY;
 
-    // If its the closest intersection so far, update ray HitInfo.
-    if(hasIntersected && newT < ray.hitInfo.minT){
-        ray.hitInfo.minT = newT;
-        ray.hitInfo.hasHit = true;
-        ray.hitInfo.normal = face.n;
-        
-        ray.hitInfo.hitPoint = ray.origin + ray.dir * ray.hitInfo.minT;
-        // ray.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(face.n, 0.0f)));
-
-        ray.hitInfo.matId = this->GetMaterial();
-        return true;
-    }
-    else return false;
-    // return hasIntersected;
-}
-bool DorkTracer::Mesh::IsBackface(Face& face, Vec3f& rayDir)
-{
-    return dot(face.n, rayDir) > 0.0f;
-}
-
-bool DorkTracer::Mesh::DoesIntersectTriangle(Ray& ray, Vec3f& v0, Vec3f& v1, Vec3f& v2, float& t)
-{
     float matrixA[3][3] = {v0.x - v1.x, v0.x - v2.x, ray.dir.x,
                            v0.y - v1.y, v0.y - v2.y, ray.dir.y,
                            v0.z - v1.z, v0.z - v2.z, ray.dir.z};
@@ -242,6 +220,41 @@ bool DorkTracer::Mesh::DoesIntersectTriangle(Ray& ray, Vec3f& v0, Vec3f& v1, Vec
                            v0.z - v1.z, v0.z - v2.z, v0.z - ray.origin.z};
 
     // t is out parameter.
-    t = determinant(matrixT) / detA;
-    return t > 0.0f;
+    float t = determinant(matrixT) / detA;
+    bool isClosestIntersection = t > 0.0f && t < ray.hitInfo.minT;
+    if(isClosestIntersection)
+    {
+        ray.hitInfo.minT = t;
+        ray.hitInfo.hasHit = true;
+        ray.hitInfo.normal = face.n;
+        
+        // Calculate and store UV value for this hit point.
+        Vec2f& v0_uv = uv[face.v0_id-1];
+        Vec2f& v1_uv = uv[face.v1_id-1];
+        Vec2f& v2_uv = uv[face.v2_id-1];
+
+        // u(B,Y) = u_a + B(u_b - u_a) + Y(u_c - u_a)
+        // v(B,Y) = v_a + B(v_b - v_a) + Y(v_c - u_a)
+        float u = v0_uv.x + beta * (v1_uv.x - v0_uv.x) + gama * (v2_uv.x - v0_uv.x);
+        float v = v0_uv.y + beta * (v1_uv.y - v0_uv.y) + gama * (v2_uv.y - v0_uv.y);
+        ray.hitInfo.hitUV.x = u;
+        ray.hitInfo.hitUV.y = v;
+
+        ray.hitInfo.hitPoint = ray.origin + ray.dir * ray.hitInfo.minT;
+        // ray.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(face.n, 0.0f)));
+
+        ray.hitInfo.matId = this->GetMaterial();
+        ray.hitInfo.hitShape = this;
+        return true;
+    }
+    else return false;
 }
+bool DorkTracer::Mesh::IsBackface(Face& face, Vec3f& rayDir)
+{
+    return dot(face.n, rayDir) > 0.0f;
+}
+
+// bool DorkTracer::Mesh::DoesIntersectTriangle(Ray& ray, Vec3f& v0, Vec3f& v1, Vec3f& v2, float& t, float currMinT)
+// {
+ 
+// }

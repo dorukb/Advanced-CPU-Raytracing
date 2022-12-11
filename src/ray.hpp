@@ -5,7 +5,8 @@
 
 namespace DorkTracer
 {
-    
+    class Shape;
+
     struct HitInfo
     {
         bool hasHit;
@@ -14,6 +15,8 @@ namespace DorkTracer
         float minT;
         Vec3f normal;
         Vec3f hitPoint;
+        Vec2f hitUV;
+        Shape* hitShape;
     };
 
     struct Ray

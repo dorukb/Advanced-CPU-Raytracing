@@ -14,6 +14,9 @@
 #include "texture.h"
 
 #include "image.h"
+#include "texture.h"
+#include "imageTexture.h"
+#include "perlinTexture.h"
 
 namespace DorkTracer{
 
@@ -31,6 +34,8 @@ namespace DorkTracer{
         static float shadow_ray_epsilon;
 
         Vec3i background_color;
+        Texture* bgTexture;
+
         int max_recursion_depth;
         bool isMotionBlurEnabled;
         Vec3f ambient_light;
@@ -39,7 +44,10 @@ namespace DorkTracer{
         std::vector<PointLight> point_lights;
         std::vector<AreaLight*> areaLights;
         std::vector<Material> materials;
+
         std::vector<Vec3f> vertex_data;
+        std::vector<Vec2f> texCoords;
+
         std::vector<Shape*> meshes;
         std::vector<Sphere*> spheres;
         std::vector<Shape*> triangles;
@@ -48,7 +56,7 @@ namespace DorkTracer{
         std::vector<Vec3f> scalings;
         std::vector<Vec4f> rotations;
 
-        std::vector<Texture> textures;
+        std::vector<Texture*> textures;
         std::vector<Image*> images;
 
         void loadFromXml(const std::string &filepath);
@@ -57,6 +65,7 @@ namespace DorkTracer{
         void computeFaceCenter(Face& face, std::vector<Vec3f>& vertices);
         void computeFaceProperties(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
         void computeTransform(DorkTracer::Shape* shape, std::string input);
+        void SetupTextures(DorkTracer::Shape* shape, std::string& texturesInp);
         DorkTracer::BoundingBox transformBoundingBox(DorkTracer::BoundingBox original, DorkTracer::Matrix& transform);
     };
 }
