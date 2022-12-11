@@ -314,6 +314,37 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         element = element->NextSiblingElement("Material");
     }
 
+
+    // Get Textures
+    element = root->FirstChildElement("Textures");
+    if(element)
+    {
+        // Load images if any
+        element = element->FirstChildElement("Images");
+        if(element){
+            element = element->FirstChildElement("Image");
+            while (element){
+                int id;
+                stream << element->Attribute("id") << std::endl;
+                stream >> id;
+
+                std::string filename;
+                stream << element->GetText() << std::endl;
+                stream >> filename;
+
+                Image* image = new Image(std::string("inputs/" + filename), id);
+                this->images.push_back(image);
+
+                
+                element = element->FirstChildElement("Image");
+            }
+        }
+
+        // Load texture maps if any
+     
+    }
+
+
     // Get VertexData
     element = root->FirstChildElement("VertexData");
     stream << element->GetText() << std::endl;

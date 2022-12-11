@@ -1,5 +1,6 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#define STB_IMAGE_IMPLEMENTATION
 
 #include <chrono>
 #include <iostream>
@@ -9,7 +10,7 @@
 #include "helperMath.h"
 #include "gaussian.h"
 
-#define THREAD_COUNT 8
+#define THREAD_COUNT 12
 
 struct RenderThreadArgs{
     DorkTracer::Raytracer* renderer;
@@ -100,6 +101,15 @@ void renderThreadMain(RenderThreadArgs args)
 
             // TODO: apply a tonemapping operator instead of simple clamping.
             Vec3i finalColor = clamp(color);
+
+            // Test image loading & sampling
+            // #include "image.h"
+            // DorkTracer::Image* img = renderer->scene.images[0];
+            // float u = x / (float)width;
+            // float v = y / (float)height;
+            // Vec3i finalColor = img->GetSample(u,v);
+            // Test image loading & sampling
+
 
             uint32_t imgIdx = 3 * (x + y * width);
             image[imgIdx] = finalColor.x;

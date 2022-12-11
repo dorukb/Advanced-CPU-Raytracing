@@ -11,7 +11,9 @@
 #include "sphere.hpp"
 #include "tinyxml2.h"
 #include "areaLight.h"
+#include "texture.h"
 
+#include "image.h"
 
 namespace DorkTracer{
 
@@ -45,6 +47,9 @@ namespace DorkTracer{
         std::vector<Vec3f> translations;
         std::vector<Vec3f> scalings;
         std::vector<Vec4f> rotations;
+
+        std::vector<Texture> textures;
+        std::vector<Image*> images;
 
         void loadFromXml(const std::string &filepath);
         void computeFaceNormal(Face& face, std::vector<Vec3f>& vertices);
