@@ -229,16 +229,75 @@ bool DorkTracer::Mesh::IntersectFace(Ray& ray, Face& face)
         ray.hitInfo.normal = face.n;
         
         // Calculate and store UV value for this hit point.
-        Vec2f& v0_uv = uv[face.v0_id-1];
-        Vec2f& v1_uv = uv[face.v1_id-1];
-        Vec2f& v2_uv = uv[face.v2_id-1];
+        if(uv.size() > 0)
+        {
+            Vec2f& v0_uv = uv[face.v0_id-1];
+            Vec2f& v1_uv = uv[face.v1_id-1];
+            Vec2f& v2_uv = uv[face.v2_id-1];
 
-        // u(B,Y) = u_a + B(u_b - u_a) + Y(u_c - u_a)
-        // v(B,Y) = v_a + B(v_b - v_a) + Y(v_c - u_a)
-        float u = v0_uv.x + beta * (v1_uv.x - v0_uv.x) + gama * (v2_uv.x - v0_uv.x);
-        float v = v0_uv.y + beta * (v1_uv.y - v0_uv.y) + gama * (v2_uv.y - v0_uv.y);
-        ray.hitInfo.hitUV.x = u;
-        ray.hitInfo.hitUV.y = v;
+            // u(B,Y) = u_a + B(u_b - u_a) + Y(u_c - u_a)
+            // v(B,Y) = v_a + B(v_b - v_a) + Y(v_c - u_a)
+            float u = v0_uv.x + beta * (v1_uv.x - v0_uv.x) + gama * (v2_uv.x - v0_uv.x);
+            float v = v0_uv.y + beta * (v1_uv.y - v0_uv.y) + gama * (v2_uv.y - v0_uv.y);
+            ray.hitInfo.hitUV.x = u;
+            ray.hitInfo.hitUV.y = v;
+
+            Vec3f e1 = v1-v0;
+            Vec3f e2 = v2-v1;
+            // Vec3f e2 = v2-v0;
+
+
+            if(this->normalMap != nullptr){
+                Vec3f sampledNormal = this->normalMap->GetSample(u,v);
+                sampledNormal = sampledNormal / (127.5f) - Vec3f(1,1,1);
+                sampledNormal = makeUnit(sampledNormal);
+
+                // convert normal map vector from canonical to local space.
+                float u1 = v1_uv.x - v0_uv.x;
+                float v1 = v1_uv.y - v0_uv.y;
+
+                float u2 = v2_uv.x - v1_uv.x;
+                float v2 = v2_uv.y - v1_uv.y;
+                // float u2 = v2_uv.x - v0_uv.x;
+                // float v2 = v2_uv.y - v0_uv.y;
+
+                float det = 1.0f / (u1*v2 - v1*u2);
+
+                Vec3f tan,bitan;
+                tan.x = det * (v2*e1.x - v1*e2.x);
+                tan.y = det * (v2*e1.y - v1*e2.y);
+                tan.z = det * (v2*e1.z - v1*e2.z);
+                
+                bitan.x = -det*u2*e1.x + det*u1*e2.x;
+                bitan.y = -det*u2*e1.y + det*u1*e2.y;
+                bitan.z = -det*u2*e1.z + det*u1*e2.z;
+
+                tan = makeUnit(tan);
+                bitan = makeUnit(bitan);
+                Matrix mat(3,3);
+                mat[0][0] = tan.x;
+                mat[0][1] = bitan.x;
+                mat[0][2] = face.n.x;
+
+                mat[1][0] = tan.y;
+                mat[1][1] = bitan.y;
+                mat[1][2] = face.n.y;
+
+                mat[2][0] = tan.z;
+                mat[2][1] = bitan.z;
+                mat[2][2] = face.n.z;
+
+                Matrix normalVec(3,1);
+                normalVec[0][0] = sampledNormal.x;
+                normalVec[1][0] = sampledNormal.y;
+                normalVec[2][0] = sampledNormal.z;
+
+                Matrix newNormalMat = mat * normalVec;
+                Vec3f actualNormal(newNormalMat[0][0], newNormalMat[1][0], newNormalMat[2][0]);
+
+                ray.hitInfo.normal = makeUnit(actualNormal);
+            }
+        }
 
         ray.hitInfo.hitPoint = ray.origin + ray.dir * ray.hitInfo.minT;
         // ray.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(face.n, 0.0f)));

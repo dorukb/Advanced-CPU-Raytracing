@@ -49,7 +49,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     }
     else
     {
-        Scene::shadow_ray_epsilon = 0.001;
+        Scene::shadow_ray_epsilon = 0.01f;
+        std::cout<<"set shadow ray epsilon to: "<< Scene::shadow_ray_epsilon<< std::endl;
     }
 
     //Get MaxRecursionDepth
@@ -456,14 +457,17 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
     // Get TexCoordData (u,v)
     element = root->FirstChildElement("TexCoordData");
-    stream << element->GetText() << std::endl;
-    Vec2f texCoord;
-    while (!(stream >> texCoord.x).eof())
+    if(element)
     {
-        stream >> texCoord.y;
-        texCoords.push_back(texCoord);
+        stream << element->GetText() << std::endl;
+        Vec2f texCoord;
+        while (!(stream >> texCoord.x).eof())
+        {
+            stream >> texCoord.y;
+            texCoords.push_back(texCoord);
+        }
+        stream.clear();
     }
-    stream.clear();
 
     // Get Transformations
     element = root->FirstChildElement("Transformations");
@@ -940,7 +944,8 @@ void DorkTracer::Scene::SetupTextures(DorkTracer::Shape* shape, std::string& tex
                 break;
             }
         }
-        
+        if(texture == nullptr) break;
+
         switch(texture->type){
             case Texture::Textures::Diffuse:
                 shape->diffuseTex = texture;

@@ -1,5 +1,4 @@
 #include "sphere.hpp"
-
 using namespace DorkTracer;
 
 Sphere::Sphere(std::vector<Vec3f>& vertex_data)
@@ -7,33 +6,26 @@ Sphere::Sphere(std::vector<Vec3f>& vertex_data)
     this->vertex_data = vertex_data;
 }
 
-bool DorkTracer::Sphere::Intersect(Ray& r){
+bool DorkTracer::Sphere::Intersect(Ray& r)
+{
     Vec3f center = this->vertex_data[center_vertex_id - 1];
 
-    Vec3f worldCenter =  Matrix::ApplyTransform(this->transform, Vec4f(center,1.0f));
-    // Transform the ray into our local space.
     Vec3f rayOriginCache = r.origin;
     Vec3f rayDirCache = r.dir;
     
-    Vec4f rayOrg(r.origin, 1.0f);
-    Vec4f rayDir(r.dir, 0.0f);
-    
-    Vec3f transformedOrigin = Matrix::ApplyTransform(this->inverseTransform, rayOrg);
-    Vec3f transformedDir = Matrix::ApplyTransform(this->inverseTransform, rayDir);
-
-    r.origin = transformedOrigin;
-    // r.dir = makeUnit(transformedDir);
-    r.dir = transformedDir;
+    // Transform the ray into our local space.
+    r.origin = Matrix::ApplyTransformToPoint(this->inverseTransform, r.origin);
+    r.dir = Matrix::ApplyTransformToVector(this->inverseTransform, r.dir);
 
     Vec3f oc = r.origin - center;
-    float t,t1, t2;
+    float t, t1, t2;
 
     float c = dot(oc,oc) - (radius * radius);
     float b =  2 * dot(r.dir, oc);
     float a = dot(r.dir, r.dir);
     float delta = b*b - (4 * a * c);
 
-    if(delta < 0.0){
+    if(delta < 0.0f){
         r.origin = rayOriginCache;
         r.dir = rayDirCache;
         return false;
@@ -59,10 +51,10 @@ bool DorkTracer::Sphere::Intersect(Ray& r){
             }
             else t = t1;
         }
-        // todo: consider ignoring negative t before selecting the min.
 
         Vec3f localhitPoint = r.origin + r.dir * t;
-        // // undo ray transformation
+
+        // undo ray transformation
         r.origin = rayOriginCache;
         r.dir = rayDirCache;
 
@@ -71,15 +63,24 @@ bool DorkTracer::Sphere::Intersect(Ray& r){
             r.hitInfo.matId = material_id;
             r.hitInfo.hitShape = this;
             r.hitInfo.hasHit = true;
+
             // calculate sphere normal at hit point
             Vec3f worldHitPoint = r.origin + r.dir * t;
             r.hitInfo.hitPoint = worldHitPoint;
 
+            // compute hit point UV.
+            Vec3f p = worldHitPoint - center;
+            float phi = std::atan2(p.z, p.x);
+            float theta = std::acos(p.y / radius);
+
+            float u = (-phi + M_PI) / (2.0f * M_PI);
+            float v = theta / M_PI;
+
+            r.hitInfo.hitUV.x = u;
+            r.hitInfo.hitUV.y = v;
+
             r.hitInfo.normal = makeUnit(localhitPoint - center);
             r.hitInfo.normal = makeUnit(Matrix::ApplyTransform(this->inverseTransposeTransform, Vec4f(r.hitInfo.normal, 0.0f)));
-
-            // r.hitInfo.normal = makeUnit(worldHitPoint - worldCenter);
-            // r.hitInfo.normal = worldHitPoint - worldCenter;
 
             return true;
         }

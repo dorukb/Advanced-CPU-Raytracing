@@ -37,6 +37,7 @@ namespace DorkTracer{
             this->motionBlurVector = Vec3f();
             this->motionBlurRandomGenerator = std::mt19937();
             this->motionBlurRandomDistro01 = std::uniform_real_distribution<>(0.0f, 1.0f);
+            this->diffuseTex = specularTex = ambientTex = normalMap = bumpMap = nullptr;
         }
 
         virtual bool Intersect(Ray&){return false;};

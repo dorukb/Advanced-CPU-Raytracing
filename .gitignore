@@ -7,3 +7,6 @@ src/build/Debug/helperMath.o
 *.ply
 *.mp4
 *.mp3
+*.jpg
+*.txt
+*.swp
