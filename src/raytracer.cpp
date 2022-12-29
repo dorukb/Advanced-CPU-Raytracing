@@ -43,7 +43,7 @@ Vec3f Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
         // sample the bg texture.
         float u= coordX / (float)cam.imageWidth;
         float v = coordY / (float)cam.imageHeight;
-        Vec3f sampledColor = scene.bgTexture->GetSample(u, v);
+        Vec3f sampledColor = scene.bgTexture->GetRGBSample(u, v);
         return sampledColor;
     }
     else return Vec3f(scene.background_color.x, scene.background_color.y, scene.background_color.z);
@@ -385,12 +385,24 @@ Vec3f Raytracer::GetAmbient(Vec3f& reflectance, Vec3f& ambientLightColor){
 Vec3f Raytracer::GetDiffuse(Shape* shape, Vec3f& k_d, Vec3f& w_i, Ray& ray, Vec3f& receivedIrradiance)
 {
     Vec3f reflectance = k_d;
-    if(shape->diffuseTex != nullptr)
+    if(shape->HasDiffuseTexture())
     {
         // TODO: calculate UV for hit point using vertices & texCoords.
         // normalize, obtain k_d in [0,1] range.
-        Vec2f& uv = ray.hitInfo.hitUV;
-        Vec3f textureKd = shape->diffuseTex->GetSample(uv.x, uv.y) / 255.0f;
+        Vec3f textureKd;
+
+        if(shape->diffuseTex->IsGenerated()){
+            // such as Perlin noise. Sampling process is different.
+            auto hp = ray.hitInfo.hitPoint;
+            float perlinSample = shape->diffuseTex->GetSampleFromWorldPos(hp.x, hp.y, hp.z);
+            textureKd.x = textureKd.y = textureKd.z = perlinSample;
+        }
+        else
+        {
+            Vec2f& uv = ray.hitInfo.hitUV;
+            textureKd = shape->diffuseTex->GetRGBSample(uv.x, uv.y) / 255.0f;
+        }
+
         if(shape->diffuseTex->operationMode == Texture::OperationMode::Blend)
         {
             //Equally mix the existing material kd value with the tex sample.
@@ -413,7 +425,7 @@ Vec3f Raytracer::GetSpecular(Shape* shape, Vec3f& k_s, Ray& ray, float phongExp,
         // TODO: calculate UV for hit point using vertices & texCoords.
         // normalize, obtain k_d in [0,1] range.
         Vec2f& uv = ray.hitInfo.hitUV;
-        Vec3f textureKs = shape->specularTex->GetSample(uv.x, uv.y) / 255.0f;
+        Vec3f textureKs = shape->specularTex->GetRGBSample(uv.x, uv.y) / 255.0f;
         reflectance = textureKs;
     }
 

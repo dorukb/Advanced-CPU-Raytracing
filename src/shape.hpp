@@ -46,6 +46,15 @@ namespace DorkTracer{
         {
             return this->motionBlurRandomDistro01(this->motionBlurRandomGenerator);
         }
+        bool HasNormalMap(){
+            return normalMap != nullptr;
+        }
+        bool HasBumpMap(){
+            return bumpMap != nullptr;
+        }
+        bool HasDiffuseTexture(){
+            return diffuseTex != nullptr;
+        }
     };
 
     struct BoundingBox

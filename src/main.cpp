@@ -2,6 +2,9 @@
 #include "stb_image_write.h"
 #define STB_IMAGE_IMPLEMENTATION
 
+#define TINYEXR_IMPLEMENTATION
+#include "tinyexr.h"
+
 #include <chrono>
 #include <iostream>
 #include <thread>
@@ -10,7 +13,7 @@
 #include "helperMath.h"
 #include "gaussian.h"
 
-#define THREAD_COUNT 12
+#define THREAD_COUNT 8
 
 struct RenderThreadArgs{
     DorkTracer::Raytracer* renderer;

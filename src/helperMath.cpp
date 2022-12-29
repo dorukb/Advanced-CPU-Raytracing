@@ -1,6 +1,6 @@
 #include "helperMath.h"
 #include <algorithm>
-
+#include "matrix.hpp"
 // using namespace parser;
 
 Vec3f operator+(const Vec3f& v1, const Vec3f& v2){
@@ -84,7 +84,30 @@ void GetOrthonormalBasis(Vec3f r, Vec3f& u, Vec3f& v)
     u = makeUnit(cross(rPrime, r));
     v = makeUnit(cross(r, u));
 }
+Vec3f GetTransformedNormal(Vec3f& tan, Vec3f& bitan, Vec3f& normal, Vec3f& sampledNormal)
+{
+    DorkTracer::Matrix matTNB(3,3);
+    matTNB[0][0] = tan.x;
+    matTNB[0][1] = bitan.x;
+    matTNB[0][2] = normal.x;
 
+    matTNB[1][0] = tan.y;
+    matTNB[1][1] = bitan.y;
+    matTNB[1][2] = normal.y;
+
+    matTNB[2][0] = tan.z;
+    matTNB[2][1] = bitan.z;
+    matTNB[2][2] = normal.z;
+
+    DorkTracer::Matrix normalVec(3,1);
+    normalVec[0][0] = sampledNormal.x;
+    normalVec[1][0] = sampledNormal.y;
+    normalVec[2][0] = sampledNormal.z;
+
+    DorkTracer::Matrix newNormalMat = matTNB * normalVec;
+   
+    return makeUnit(Vec3f(newNormalMat[0][0], newNormalMat[1][0], newNormalMat[2][0]));
+}
 Vec3f cross(const Vec3f &first, const Vec3f &second){
     Vec3f result;
     result.x = first.y * second.z - first.z * second.y;

@@ -47,12 +47,6 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         stream << element->GetText() << std::endl;
         stream >> Scene::shadow_ray_epsilon;
     }
-    else
-    {
-        Scene::shadow_ray_epsilon = 0.01f;
-        std::cout<<"set shadow ray epsilon to: "<< Scene::shadow_ray_epsilon<< std::endl;
-    }
-
     //Get MaxRecursionDepth
     element = root->FirstChildElement("MaxRecursionDepth");
     if (element)
@@ -375,17 +369,24 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 stream >> imageId;
                 
                 child = element->FirstChildElement("Interpolation");
-                std::string interpMode = "bilinear";
+                std::string interpMode = "nearest";
                 if(child){
                     stream << child->GetText() << std::endl;
                     stream >> interpMode;
                 }
 
-                float normalizer = 1.0f;
+                float normalizer = 255.0f;
                 child = element->FirstChildElement("Normalizer");
                 if(child){
                     stream << child->GetText() << std::endl;
                     stream >> normalizer;
+                }
+
+                float sampleMultiplier = 1.0f;
+                child = element->FirstChildElement("BumpFactor");
+                if(child){
+                    stream << child->GetText() << std::endl;
+                    stream >> sampleMultiplier;
                 }
 
                 Image* img = nullptr;
@@ -399,7 +400,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                     std::cout << "Couldnt get image with id: " + imageId << std::endl; 
                 }
 
-                ImageTexture* tex = new ImageTexture(textureId, decalMode, interpMode, img);
+                ImageTexture* tex = new ImageTexture(textureId, normalizer, sampleMultiplier, decalMode, interpMode, img);
                 this->textures.push_back(tex);
 
                 if(decalMode == "replace_background")
@@ -422,9 +423,17 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 if(child){
                     stream << child->GetText() << std::endl;
                     stream >> noiseScale;
+                }   
+                
+                float bumpFactor = 1.0f;
+                child = element->FirstChildElement("BumpFactor");
+                if(child){
+                    stream << child->GetText() << std::endl;
+                    stream >> bumpFactor;
                 }
 
                 PerlinTexture* tex = new PerlinTexture(textureId, decalMode, noiseScale, noiseConversion);
+                tex->bumpFactor = bumpFactor;
                 this->textures.push_back(tex);
 
                 if(decalMode == "replace_background")
@@ -594,6 +603,18 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
         child = element->FirstChildElement("Faces");
 
+        int vertexOffset = 0;
+        if(child->Attribute("vertexOffset") != NULL){
+            stream << child->Attribute("vertexOffset") << std::endl;
+            stream >> vertexOffset;
+        }
+        int textureOffset = 0;
+        if(child->Attribute("textureOffset") != NULL){
+            stream << child->Attribute("textureOffset") << std::endl;
+            stream >> textureOffset;
+        }
+        mesh->SetAccessOffsets(vertexOffset, textureOffset);
+
         BoundingBox bbox;
         bbox.maxCorner.x = bbox.maxCorner.y = bbox.maxCorner.z = std::numeric_limits<float>::min();
         bbox.minCorner.x = bbox.minCorner.y = bbox.minCorner.z = std::numeric_limits<float>::max();
@@ -611,7 +632,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
             for(int i = 0; i < vPos.size(); i++){
                 Vec3f vert { vPos[i][0], vPos[i][1], vPos[i][2]};
-                mesh->vertices.push_back(vert);
+                mesh->AddVertex(vert);
             }
             vPos.clear();
 
@@ -619,7 +640,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 std::cout << str << std::endl;
             }
             std::vector<std::vector<int>> fInd = plyIn.getFaceIndices<int>();
-            std::cout<<"has: "<<  fInd.size() << " faces and "<< mesh->vertices.size() << " vertices."<< std::endl;
+            std::cout<<"has: "<<  fInd.size() << " Triangles."<< std::endl;
             for(int i = 0; i < fInd.size(); i++){
 
                 DorkTracer::Face face;
@@ -631,7 +652,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 face.v0_id = fInd[i][0] + 1;
                 face.v1_id = fInd[i][1] + 1;
                 face.v2_id = fInd[i][2] + 1;
-                computeFaceProperties(face, mesh->vertices);
+                computeFaceProperties(face, mesh);
 
                 // calculate bbox of the owner mesh here
                 bbox.minCorner.x = std::min(face.bbox.minCorner.x,  bbox.minCorner.x);
@@ -647,15 +668,12 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         }
         else
         {
-            // regular parsing
-            // mesh.useOwnVertices = false;
-
             stream << child->GetText() << std::endl;
             DorkTracer::Face face;
             while (!(stream >> face.v0_id).eof())
             {
                 stream >> face.v1_id >> face.v2_id;
-                computeFaceProperties(face, mesh->vertices);
+                computeFaceProperties(face, mesh);
                 
                 // calculate bbox of the owner mesh here
                 bbox.minCorner.x = std::min(face.bbox.minCorner.x,  bbox.minCorner.x);
@@ -669,9 +687,6 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 mesh->faces.push_back(face);
             }
         }
-
-
-
         stream.clear();
 
         mesh->bbox = bbox;
@@ -723,7 +738,6 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         DorkTracer::InstancedMesh* meshInstance = new InstancedMesh(baseMesh);
         meshInstance->id = ownId;
         meshInstance->isInstance = true;
-
 
         // Setup textures
         child = element->FirstChildElement("Textures");
@@ -836,7 +850,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         stream >> face.v0_id >> face.v1_id >> face.v2_id;
 
         // Normal, Centroid and BoundingBox computation per face.
-        computeFaceProperties(face, mesh->vertices);
+        computeFaceProperties(face, mesh);
         mesh->faces.push_back(face);
 
         // Has only one face, so the bounding boxes are identical.
@@ -912,20 +926,19 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     // std::cout <<"parsing succesfully completed." << std::endl;
 }
 
-void DorkTracer::Scene::computeFaceProperties(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
+void DorkTracer::Scene::computeFaceProperties(DorkTracer::Face& face, Mesh* mesh)
 {
-    computeFaceCenter(face, vertices);
-    computeFaceNormal(face, vertices);
-    computeFaceBoundingBox(face, vertices);
+    computeFaceCenter(face, mesh);
+    computeFaceNormal(face, mesh);
+    computeFaceBoundingBox(face, mesh);
 }
-void DorkTracer::Scene::computeFaceCenter(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
+void DorkTracer::Scene::computeFaceCenter(DorkTracer::Face& face, Mesh* mesh)
 {
-    Vec3f a,b,c,ab,ac;
-    a = vertices[face.v0_id -1];
-    b = vertices[face.v1_id -1];
-    c = vertices[face.v2_id -1];
-    
-    face.center = (a+b+c)/3;
+    Vec3f& a = mesh->GetVertex(face.v0_id);
+    Vec3f& b = mesh->GetVertex(face.v1_id);
+    Vec3f& c = mesh->GetVertex(face.v2_id);
+
+    face.center = (a+b+c) /3.0f;
 }
 
 void DorkTracer::Scene::SetupTextures(DorkTracer::Shape* shape, std::string& texIds)
@@ -1042,21 +1055,21 @@ void DorkTracer::Scene::computeTransform(DorkTracer::Shape* mesh, std::string tr
 
     // Matrix idt = modelMatrix * invModel;
 }
-void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
+void DorkTracer::Scene::computeFaceNormal(DorkTracer::Face& face, Mesh* mesh)
 {
-    Vec3f a,b,c,ab,ac;
-    a = vertices[face.v0_id -1];
-    b = vertices[face.v1_id -1];
-    c = vertices[face.v2_id -1];
-    ab = b - a;
-    ac = c - a;
+    Vec3f& a = mesh->GetVertex(face.v0_id);
+    Vec3f& b = mesh->GetVertex(face.v1_id);
+    Vec3f& c = mesh->GetVertex(face.v2_id);
+    Vec3f ab = b - a;
+    Vec3f ac = c - a;
+
     face.n = makeUnit(cross(ab, ac));
 }
-void DorkTracer::Scene::computeFaceBoundingBox(DorkTracer::Face& face, std::vector<Vec3f>& vertices)
+void DorkTracer::Scene::computeFaceBoundingBox(DorkTracer::Face& face, Mesh* mesh)
 {
-    Vec3f& a = vertices[face.v0_id -1];
-    Vec3f& b = vertices[face.v1_id -1];
-    Vec3f& c = vertices[face.v2_id -1];
+    Vec3f& a = mesh->GetVertex(face.v0_id);
+    Vec3f& b = mesh->GetVertex(face.v1_id);
+    Vec3f& c = mesh->GetVertex(face.v2_id);
 
     face.bbox.minCorner.x = std::min(std::min(a.x, b.x), c.x);
     face.bbox.minCorner.y = std::min(std::min(a.y, b.y), c.y);

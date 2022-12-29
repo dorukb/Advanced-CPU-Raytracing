@@ -115,9 +115,9 @@ namespace DorkTracer{
                 return ApplyTransform(t, Vec4f(p, 1.0f));
             }
 
-            static Vec3f ApplyTransformToVector(Matrix& t, Vec3f p)
+            static Vec3f ApplyTransformToVector(Matrix& t, Vec3f vec)
             {
-                return ApplyTransform(t, Vec4f(p, 0.0f));
+                return ApplyTransform(t, Vec4f(vec, 0.0f));
             }
 
             Matrix operator*(Matrix& rhs){

@@ -2,6 +2,7 @@
 #define __DORKTRACER_TEXTURE__
 
 #include "helperMath.h"
+#include <string>
 
 namespace DorkTracer
 { 
@@ -44,8 +45,18 @@ namespace DorkTracer
             SetOperationMode(mode);
             SetTextureType(mode);
         };
-        
-        virtual Vec3f GetSample(float u, float v) = 0;
+
+        virtual Vec3f GetDirectSample(int i, int j) = 0;
+        virtual Vec3f GetRGBSample(float u, float v) = 0;
+        virtual float GetSampleFromWorldPos(float x, float y, float z){
+            return 0;
+        }
+
+        virtual float GetHeight() = 0;
+        virtual float GetWidth() = 0;
+        virtual float GetNormalizer() = 0;
+        virtual float GetSampleMultiplier()= 0;
+        virtual bool IsGenerated(){return false;}
 
     private:
         void SetTextureType(std::string mode)

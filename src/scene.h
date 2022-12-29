@@ -60,10 +60,10 @@ namespace DorkTracer{
         std::vector<Image*> images;
 
         void loadFromXml(const std::string &filepath);
-        void computeFaceNormal(Face& face, std::vector<Vec3f>& vertices);
-        void computeFaceBoundingBox(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
-        void computeFaceCenter(Face& face, std::vector<Vec3f>& vertices);
-        void computeFaceProperties(DorkTracer::Face& face, std::vector<Vec3f>& vertices);
+        void computeFaceNormal(Face& face, Mesh* mesh);
+        void computeFaceBoundingBox(DorkTracer::Face& face, Mesh* mesh);
+        void computeFaceCenter(Face& face, Mesh* mesh);
+        void computeFaceProperties(DorkTracer::Face& face, Mesh* mesh);
         void computeTransform(DorkTracer::Shape* shape, std::string input);
         void SetupTextures(DorkTracer::Shape* shape, std::string& texturesInp);
         DorkTracer::BoundingBox transformBoundingBox(DorkTracer::BoundingBox original, DorkTracer::Matrix& transform);

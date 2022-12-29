@@ -10,26 +10,51 @@ namespace DorkTracer
     {
 
     public:
-        ImageTexture(int id,std::string& opMode, std::string& interpolationMode, Image* image)
+        float normalizer;
+        float sampleMultiplier;
+
+        ImageTexture(int id, float normalizer, float sampleMultiplier, std::string& opMode, std::string& interpolationMode, Image* image)
         : Texture(id, opMode)
         {
+            this->normalizer = normalizer;
+            this->sampleMultiplier = sampleMultiplier;
             this->img = image;
             this-> interpolationMode = InterpolationMode::Bilinear;
             if(interpolationMode == "nearest"){
                 this-> interpolationMode = InterpolationMode::Nearest;
             }
         }
-
-        Vec3f GetSample(float u, float v)
+        Vec3f GetDirectSample(int i, int j)
+        {
+            return img->GetSample(i,j);
+        }
+        Vec3f GetRGBSample(float u, float v)
         {
             int i,j;
             if(interpolationMode == InterpolationMode::Nearest)
             {
                 i = (int) (u * img->width);
                 j = (int) (v * img->height);
+                
+                i = std::min(img->width-1, i);
+                j = std::min(img->height-1, j);
                 return img->GetSample(i, j);
             }
             else return interpolateBilinear(u, v);
+        }
+        float GetNormalizer(){
+            return this->normalizer;
+        }
+        float GetSampleMultiplier(){
+            return this->sampleMultiplier;
+        }
+        float GetHeight()
+        {
+            return img->height;
+        }
+        float GetWidth()
+        {
+            return img->width;
         }
 
     private:
@@ -66,9 +91,7 @@ namespace DorkTracer
             Vec3f finalColor =  img->GetSample(p,q) * w1 + img->GetSample(p+1, q) * w2
                                 + img->GetSample(p, q+1) * w3 + img->GetSample(p+1, q+1) * w4;
             return finalColor;
-        }
-
-
+        }       
     };
 }
 #endif

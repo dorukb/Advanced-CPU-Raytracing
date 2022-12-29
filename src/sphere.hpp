@@ -20,6 +20,7 @@ namespace DorkTracer
         virtual bool Intersect(Ray& ray);
 
     private:
+        void GetTangentAndBitangentAroundPoint(Vec3f& p, float radius, float phi, float theta, Vec3f& tan, Vec3f& bitan);
         
     };
 

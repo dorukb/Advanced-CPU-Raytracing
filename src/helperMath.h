@@ -3,7 +3,6 @@
 
 #include <math.h>
 #include <stdint.h>
-
 struct Vec3i
 {
     int x, y, z;
@@ -74,7 +73,6 @@ struct Vec4f
 };
 Vec3f cross(const Vec3f &first, const Vec3f &second);
 float dot(const Vec3f &a, const Vec3f &b);
-
 float len(Vec3f a);
 Vec3f makeUnit(Vec3f a);
 float determinant(float m [3][3]);
@@ -90,6 +88,7 @@ Vec3i operator/(const Vec3i& v1, float scaler);
 Vec3i clamp(Vec3f rgb);
 int clamp(int x);
 void GetOrthonormalBasis(Vec3f r, Vec3f& u, Vec3f& v);
+Vec3f GetTransformedNormal(Vec3f& tan, Vec3f& bitan, Vec3f& normal, Vec3f& sampledNormal);
 
 #endif // __helper_h__
 

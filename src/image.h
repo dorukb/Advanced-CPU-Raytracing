@@ -32,6 +32,11 @@ namespace DorkTracer
 
             return color;
         }
+        int GetSampleGreyscale(int i, int j)
+        {
+            uint32_t imgIdx = i + j * width;
+            return image[imgIdx];
+        }
 
     private:
         int channels;
