@@ -10,3 +10,9 @@ src/build/Debug/helperMath.o
 *.jpg
 *.txt
 *.swp
+*.out
+*.py
+*.exr
+*.hdr
+
+/submissions

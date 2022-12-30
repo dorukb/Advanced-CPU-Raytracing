@@ -11,12 +11,14 @@
 #include "sphere.hpp"
 #include "tinyxml2.h"
 #include "areaLight.h"
+#include "directionalLight.h"
 #include "texture.h"
 
 #include "image.h"
 #include "texture.h"
 #include "imageTexture.h"
 #include "perlinTexture.h"
+#include "tonemapper.h"
 
 namespace DorkTracer{
 
@@ -43,6 +45,7 @@ namespace DorkTracer{
         std::vector<Camera> cameras;
         std::vector<PointLight> point_lights;
         std::vector<AreaLight*> areaLights;
+        std::vector<DirectionalLight*> directionalLights;
         std::vector<Material> materials;
 
         std::vector<Vec3f> vertex_data;
@@ -61,12 +64,17 @@ namespace DorkTracer{
 
         void loadFromXml(const std::string &filepath);
         void computeFaceNormal(Face& face, Mesh* mesh);
+        DorkTracer::Face createFace(int v0idx, int v1idx, int v2idx, DorkTracer::Mesh* mesh);
         void computeFaceBoundingBox(DorkTracer::Face& face, Mesh* mesh);
+        void updateBBox(BoundingBox* bbox, Face& face);
+
         void computeFaceCenter(Face& face, Mesh* mesh);
         void computeFaceProperties(DorkTracer::Face& face, Mesh* mesh);
         void computeTransform(DorkTracer::Shape* shape, std::string input);
         void SetupTextures(DorkTracer::Shape* shape, std::string& texturesInp);
         DorkTracer::BoundingBox transformBoundingBox(DorkTracer::BoundingBox original, DorkTracer::Matrix& transform);
+        void parseTonemapper(tinyxml2::XMLElement* cameraElm, DorkTracer::Camera* cam);
+
     };
 }
 

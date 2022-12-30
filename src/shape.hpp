@@ -28,16 +28,16 @@ namespace DorkTracer{
 
         Texture* diffuseTex;
         Texture* specularTex;
-        Texture* ambientTex;
         Texture* normalMap;
         Texture* bumpMap;
+        Texture* replaceAll;
 
         Shape() : transform(4,4), inverseTransform(4,4), inverseTransposeTransform(4,4)
         {
             this->motionBlurVector = Vec3f();
             this->motionBlurRandomGenerator = std::mt19937();
             this->motionBlurRandomDistro01 = std::uniform_real_distribution<>(0.0f, 1.0f);
-            this->diffuseTex = specularTex = ambientTex = normalMap = bumpMap = nullptr;
+            this->diffuseTex = specularTex = replaceAll = normalMap = bumpMap = nullptr;
         }
 
         virtual bool Intersect(Ray&){return false;};
@@ -54,6 +54,9 @@ namespace DorkTracer{
         }
         bool HasDiffuseTexture(){
             return diffuseTex != nullptr;
+        }
+        bool HasReplaceAllTexture(){
+            return replaceAll != nullptr;
         }
     };
 

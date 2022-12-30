@@ -1,3 +1,6 @@
+#ifndef __DORKTRACER_AREALIGHT__
+#define __DORKTRACER_AREALIGHT__
+
 #include "helperMath.h"
 #include <random>
 
@@ -49,3 +52,5 @@ namespace DorkTracer{
     };
 
 }
+
+#endif

@@ -1,4 +1,5 @@
 #include "camera.hpp"
+#include "tonemapper.h"
 using namespace DorkTracer;
 
 void Camera::SetupDefault(Vec3f pos, Vec3f gazeDir, Vec3f upDir, Vec4f nearPlane, float nearDist, int width, int height, std::string imageName){
@@ -76,4 +77,15 @@ Vec3f Camera::GetImagePlanePosition(int width, int height)
     float sv = (height + 0.5) * (m_top- m_bottom) / imageHeight;
 
     return m_q + right * su + up *-sv;
+}
+
+void Camera::SetTonemapper(Tonemapper* tonemapper)
+{
+    this->tonemapper = tonemapper;
+    this->hasTonemapper = tonemapper != nullptr;
+}
+
+Vec3i Camera::GetTonemappedColor(Vec3f color)
+{
+    return this->tonemapper->GetTonemappedColor(color);
 }

@@ -62,6 +62,12 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
     float refractiveIndexOfVacuum = 1.00001;
     bool travellingInsideAnObject = ray.refractiveIndexOfCurrentMedium > refractiveIndexOfVacuum;
 
+    // If Replace_all mode, disable shading, directly output texture color.
+    if(shape->HasReplaceAllTexture()){
+        return shape->replaceAll->GetRGBSample(ray.hitInfo.hitUV.x, ray.hitInfo.hitUV.y);
+    }
+
+
     if(!travellingInsideAnObject)
     {
         color = color + GetAmbient(mat.ambient, scene.ambient_light);
@@ -108,6 +114,17 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
             color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
             color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, receivedIrradiance);
         }    
+        for(int i = 0; i < scene.directionalLights.size(); i++)
+        {
+            DirectionalLight* light = scene.directionalLights[i];
+            if(IsInShadowDirectional(ray, light->dir)){
+                continue;
+            }
+
+            Vec3f w_i = -(light->dir);
+            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, light->radiance);
+            color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, light->radiance);
+        }
     }
  
     if(mat.type == Material::Mirror)
@@ -433,7 +450,18 @@ Vec3f Raytracer::GetSpecular(Shape* shape, Vec3f& k_s, Ray& ray, float phongExp,
     float cosAlpha = std::max(0.0f, dot(ray.hitInfo.normal, half));
     return reflectance * receivedIrradiance * std::pow(cosAlpha, phongExp);
 }
-
+bool Raytracer::IsInShadowDirectional(Ray& originalRay, Vec3f& lightDir)
+{
+    Ray shadowRay;
+    shadowRay.dir = -lightDir;
+    shadowRay.origin = originalRay.hitInfo.hitPoint + originalRay.hitInfo.normal * Scene::shadow_ray_epsilon;
+    shadowRay.hitInfo.hasHit = false;
+    
+    //directional lights are INFINITELY far away.
+    shadowRay.hitInfo.minT = INFINITY;
+    shadowRay.motionBlurTime = originalRay.motionBlurTime;
+    return CastShadowRay(shadowRay, INFINITY);
+}
 bool Raytracer::IsInShadow(Ray& originalRay, Vec3f& lightPos)
 {
     // intersect with all objects in the scene, 
@@ -443,25 +471,19 @@ bool Raytracer::IsInShadow(Ray& originalRay, Vec3f& lightPos)
     shadowRay.dir = lightPos - originalRay.hitInfo.hitPoint;
     float lightSourceT = len(shadowRay.dir);
 
-    shadowRay.dir = shadowRay.dir / lightSourceT; // normalize.
+    shadowRay.dir = shadowRay.dir / lightSourceT; // cheap normalization.
     shadowRay.origin = originalRay.hitInfo.hitPoint + originalRay.hitInfo.normal * Scene::shadow_ray_epsilon;
 
     shadowRay.hitInfo.hasHit = false;
     shadowRay.hitInfo.minT = lightSourceT + 0.01f;
     shadowRay.motionBlurTime = originalRay.motionBlurTime;
-    // if(scene.areaLights.size() > 0)
-    // {    
-    //     shadowRay.lightSampleX = GetRandom();
-    //     shadowRay.lightSampleY = GetRandom();
-    // }
-    // else{
-    //     shadowRay.lightSampleX = shadowRay.lightSampleY = 0.0f;
-    // }
-    // shadowRay.lightSampleX = originalRay.lightSampleX;
-    // shadowRay.lightSampleY = originalRay.lightSampleY;
 
-
-    for(int i = 0; i < scene.meshes.size(); i++){
+    return CastShadowRay(shadowRay, lightSourceT);
+}
+bool Raytracer::CastShadowRay(Ray& shadowRay, float lightSourceT)
+{
+    for(int i = 0; i < scene.meshes.size(); i++)
+    {
         Shape* mesh = scene.meshes[i];
         mesh->Intersect(shadowRay);
 
@@ -493,6 +515,7 @@ bool Raytracer::IsInShadow(Ray& originalRay, Vec3f& lightPos)
 
     return false;
 }
+
 void Raytracer::IntersectObjects(Ray& ray)
 {
     for(int i = 0; i < scene.meshes.size(); i++){

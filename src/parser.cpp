@@ -8,6 +8,10 @@
 #include <limits>
 #include "matrix.hpp"
 #include "instancedMesh.hpp"
+#include "HDRImage.h"
+#include "LDRImage.h"
+
+using namespace DorkTracer;
 
 void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 {
@@ -146,6 +150,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         }
         camera.apertureSize = apertureSize;
 
+        parseTonemapper(element, &camera);
 
         cameras.push_back(camera);
         element = element->NextSiblingElement("Camera");
@@ -207,6 +212,30 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         areaLights.push_back(new AreaLight(id, pos, normal, radiance, size));
 
         element = element->NextSiblingElement("AreaLight");
+    }
+
+    element = root->FirstChildElement("Lights");
+    element = element->FirstChildElement("DirectionalLight");
+    while (element)
+    {
+        Vec3f radiance, dir;
+        int id;
+        
+        stream << element->Attribute("id") << std::endl;
+        stream >> id;
+        
+
+        child = element->FirstChildElement("Direction");
+        stream << child->GetText() << std::endl;
+        stream >> dir.x >> dir.y >> dir.z;
+        
+        child = element->FirstChildElement("Radiance");
+        stream << child->GetText() << std::endl;
+        stream >> radiance.x >> radiance.y >> radiance.z;
+
+        directionalLights.push_back(new DirectionalLight(id, dir, radiance));
+
+        element = element->NextSiblingElement("DirectionalLight");
     }
 
 
@@ -333,7 +362,16 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
                 stream << element->GetText() << std::endl;
                 stream >> filename;
 
-                Image* image = new Image(std::string("inputs/" + filename), id);
+                Image* image = nullptr;
+                if(filename.find(".exr") != std::string::npos)
+                {
+                    // EXR/ HDR image
+                    std::cout<<"Creating HDR image from:" << filename << std::endl;
+                    image = new HDRImage(std::string("inputs/" + filename), id);
+                }
+                else{
+                    image = new LDRImage(std::string("inputs/" + filename), id);
+                }
                 this->images.push_back(image);
 
                 
@@ -455,13 +493,17 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
     // Get VertexData
     element = root->FirstChildElement("VertexData");
-    stream << element->GetText() << std::endl;
-    Vec3f vertex;
-    while (!(stream >> vertex.x).eof())
+    if(element)
     {
-        stream >> vertex.y >> vertex.z;
-        vertex_data.push_back(vertex);
+        stream << element->GetText() << std::endl;
+        Vec3f vertex;
+        while (!(stream >> vertex.x).eof())
+        {
+            stream >> vertex.y >> vertex.z;
+            vertex_data.push_back(vertex);
+        }
     }
+   
     stream.clear();
 
     // Get TexCoordData (u,v)
@@ -641,29 +683,31 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             }
             std::vector<std::vector<int>> fInd = plyIn.getFaceIndices<int>();
             std::cout<<"has: "<<  fInd.size() << " Triangles."<< std::endl;
-            for(int i = 0; i < fInd.size(); i++){
+            for(int i = 0; i < fInd.size(); i++)
+            {
+                if(fInd[i].size() == 3){
+                    // ply format is 0 base indexed, whereas rest of our project uses 1-based indexing, so add that offset.
+                    DorkTracer::Face face = createFace(fInd[i][0]+1, fInd[i][1] + 1, fInd[i][2] + 1, mesh);
 
-                DorkTracer::Face face;
-                if(fInd[i].size() != 3){
-                    std::cout<<"A face is assumed to have 3 indices. can not parse. index count:" << fInd[i].size() << std::endl;
-                    return;
+                    // calculate bbox of the owner mesh here
+                    updateBBox(&bbox, face);
+                    mesh->faces.push_back(face);
                 }
-                // ply format is 0 base indexed, whereas rest of our project uses 1-based indexing, so add that offset.
-                face.v0_id = fInd[i][0] + 1;
-                face.v1_id = fInd[i][1] + 1;
-                face.v2_id = fInd[i][2] + 1;
-                computeFaceProperties(face, mesh);
+                else if(fInd[i].size() == 4)
+                {
+                    // ply format is 0 base indexed, whereas rest of our project uses 1-based indexing, so add that offset.
+                    DorkTracer::Face face1 = createFace(fInd[i][0]+1, fInd[i][1] + 1, fInd[i][2] + 1, mesh);
+                    updateBBox(&bbox, face1);
+                    mesh->faces.push_back(face1);
 
-                // calculate bbox of the owner mesh here
-                bbox.minCorner.x = std::min(face.bbox.minCorner.x,  bbox.minCorner.x);
-                bbox.minCorner.y = std::min(face.bbox.minCorner.y,  bbox.minCorner.y);
-                bbox.minCorner.z = std::min(face.bbox.minCorner.z,  bbox.minCorner.z);
+                    DorkTracer::Face face2 = createFace(fInd[i][2]+1, fInd[i][3] + 1, fInd[i][0] + 1, mesh);
+                    updateBBox(&bbox, face2);
+                    mesh->faces.push_back(face2);
 
-                bbox.maxCorner.x = std::max(face.bbox.maxCorner.x, bbox.maxCorner.x);
-                bbox.maxCorner.y = std::max(face.bbox.maxCorner.y, bbox.maxCorner.y);
-                bbox.maxCorner.z = std::max(face.bbox.maxCorner.z, bbox.maxCorner.z);
-
-                mesh->faces.push_back(face);
+                }
+                else{
+                    std::cout<<"A face is assumed to have 3 or 4 indices. can not parse. index count:" << fInd[i].size() << std::endl;
+                }
             }
         }
         else
@@ -966,10 +1010,8 @@ void DorkTracer::Scene::SetupTextures(DorkTracer::Shape* shape, std::string& tex
             case Texture::Textures::Specular:
                 shape->specularTex = texture;
                 break;
-            case Texture::Textures::DiffSpecAmb:
-                shape->diffuseTex = texture;
-                shape->specularTex = texture;
-                shape->ambientTex = texture;
+            case Texture::Textures::ReplaceAll:
+                shape->replaceAll = texture;
                 break;
             case Texture::Textures::Normal:
                 shape->normalMap = texture;
@@ -1137,3 +1179,69 @@ DorkTracer::BoundingBox DorkTracer::Scene::transformBoundingBox(DorkTracer::Boun
     
     return res;
 }
+DorkTracer::Face DorkTracer::Scene::createFace(int v0idx, int v1idx, int v2idx, DorkTracer::Mesh* mesh)
+{
+    DorkTracer::Face face;
+    face.v0_id = v0idx;
+    face.v1_id = v1idx;
+    face.v2_id = v2idx;
+    computeFaceProperties(face, mesh);
+    return face;
+}
+void Scene::updateBBox(BoundingBox* bbox, Face& face)
+{
+    // calculate bbox of the owner mesh here
+    bbox->minCorner.x = std::min(face.bbox.minCorner.x,  bbox->minCorner.x);
+    bbox->minCorner.y = std::min(face.bbox.minCorner.y,  bbox->minCorner.y);
+    bbox->minCorner.z = std::min(face.bbox.minCorner.z,  bbox->minCorner.z);
+
+    bbox->maxCorner.x = std::max(face.bbox.maxCorner.x, bbox->maxCorner.x);
+    bbox->maxCorner.y = std::max(face.bbox.maxCorner.y, bbox->maxCorner.y);
+    bbox->maxCorner.z = std::max(face.bbox.maxCorner.z, bbox->maxCorner.z);
+}
+void DorkTracer::Scene::parseTonemapper(tinyxml2::XMLElement* cameraElm, DorkTracer::Camera* cam)
+{ 
+    // - TMO tonemapping operator type
+    // - TMOOptions key value & burn percentage
+    // - Saturation
+    // - gamma
+    std::cout << "parsing tonemapper"<<std::endl;
+    auto child = cameraElm->FirstChildElement("Tonemap");
+    if(child != nullptr)
+    {
+        std::stringstream stream;
+        auto childElmPtr = child->FirstChildElement("TMO");
+        std::string opType = "Photographic";
+        if(childElmPtr != nullptr){
+            stream << childElmPtr->GetText() << std::endl;
+            stream >> opType;
+        }
+
+        childElmPtr = child->FirstChildElement("TMOOptions");
+        float keyValue = 0.18f;
+        float burnPerct = 1.0f;
+        if(childElmPtr != nullptr){
+            stream << childElmPtr->GetText() << std::endl;
+            stream >> keyValue >> burnPerct;
+        }
+
+        childElmPtr = child->FirstChildElement("Saturation");
+        float saturation = 1.0f;
+        if(childElmPtr != nullptr){
+            stream << childElmPtr->GetText() << std::endl;
+            stream >> saturation;
+        }
+
+        childElmPtr = child->FirstChildElement("Gamma");
+        float gamma = 2.2f;
+        if(childElmPtr != nullptr){
+            stream << childElmPtr->GetText() << std::endl;
+            stream >> gamma;
+        }
+        cam->SetTonemapper(new Tonemapper(opType, keyValue,burnPerct,saturation,gamma));
+        
+        std::cout << "parsed & set tonemapper."<<std::endl;
+    }
+}
+
+     

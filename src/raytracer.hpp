@@ -34,6 +34,8 @@ namespace DorkTracer
         Vec3f GetDiffuse(Shape* shape, Vec3f& reflectance, Vec3f& w_i, Ray& ray, Vec3f& irradiance);
         Vec3f GetSpecular(Shape* s, Vec3f& k_s, Ray& ray, float phongExp, Vec3f& w_i, Vec3f& w_o, Vec3f& irradiance);
         bool IsInShadow(Ray& ray, Vec3f& lightPos);
+        bool IsInShadowDirectional(Ray& originalRay, Vec3f& dir);
+        bool CastShadowRay(Ray& shadowRay, float lightSourceT);
 
         Vec3f PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth);
         Vec3f ComputeMirrorReflection(Ray& ray, Material& mat, Vec3f& w_o, int recursionDepth);
@@ -41,7 +43,7 @@ namespace DorkTracer
         Vec3f ComputeConductorFresnelReflection(Ray& ray, Material& mat, Vec3f& w_o, int recDepth);
         Vec3f Reflect(Vec3f& normal, Vec3f& w_o, float roughness);
         Vec3f BeersLaw(float x, Vec3f c, Vec3f L_0);
-        
+
         float GetRandom();
         float GetLensSample();
     };

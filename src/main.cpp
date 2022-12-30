@@ -3,7 +3,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 
 #define TINYEXR_IMPLEMENTATION
-#include "tinyexr.h"
 
 #include <chrono>
 #include <iostream>
@@ -103,7 +102,12 @@ void renderThreadMain(RenderThreadArgs args)
             }
 
             // // TODO: apply a tonemapping operator instead of simple clamping.
-            Vec3i finalColor = clamp(color);
+            Vec3i finalColor;
+            if(cam->hasTonemapper)
+            {
+                finalColor = cam->GetTonemappedColor(color);
+            }
+            else finalColor = clamp(color);
 
             uint32_t imgIdx = 3 * (x + y * width);
             image[imgIdx] = finalColor.x;
@@ -153,7 +157,7 @@ int main(int argc, char* argv[])
             renderThreads[i].join();
         }
 
-        stbi_write_png(cam.imageName.c_str(), width, height, 3, image, width * 3);
+        stbi_write_png((cam.imageName + ".png").c_str(), width, height, 3, image, width * 3);
     }
 
     

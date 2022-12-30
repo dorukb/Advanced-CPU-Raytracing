@@ -34,7 +34,7 @@ namespace DorkTracer
             Specular,
             Bump,
             Normal,
-            DiffSpecAmb, // replace_all mode.
+            ReplaceAll,
         } type;
 
         int id;
@@ -79,7 +79,7 @@ namespace DorkTracer
             }
             else if(mode == "replace_all")
             {
-                type = Textures::DiffSpecAmb;
+                type = Textures::ReplaceAll;
             }
         };
 
