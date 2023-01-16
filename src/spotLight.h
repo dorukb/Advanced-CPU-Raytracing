@@ -2,8 +2,6 @@
 #define __DORKTRACER_SPOTLIGHT__
 
 #include "helperMath.h"
-
-#define RAD2DEG (180.0f / M_PI)
 #define DEG2RAD (M_PI / 180.0f)
 
 namespace DorkTracer
@@ -62,10 +60,6 @@ namespace DorkTracer
         double cosHalfFalloff;
         double cosHalfCoverage;
 
-        double angleBetweenUnitVectors(Vec3f& v1, Vec3f& v2)
-        {
-            return std::acos(dot(v1, v2)) * RAD2DEG;
-        }
     };
 }
 

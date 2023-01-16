@@ -1,7 +1,6 @@
 #include "helperMath.h"
 #include <algorithm>
 #include "matrix.hpp"
-// using namespace parser;
 
 Vec3f operator+(const Vec3f& v1, const Vec3f& v2){
     Vec3f result;
@@ -150,5 +149,14 @@ Vec3i clamp(Vec3f rgb)
 int clamp(int x)
 {
     return std::min(255, std::max(x, 0));
+}
+
+double angleBetweenUnitVectors(Vec3f& v1, Vec3f& v2)
+{
+    return std::acos(dot(v1, v2)) * RAD2DEG;
+}
+double cosDeg(double angleInDegrees)
+{
+    return std::cos(angleInDegrees * DEG2RAD);
 }
 

@@ -20,8 +20,6 @@ namespace DorkTracer{
         Mesh(std::vector<Vec3f>& vertices, std::vector<Vec2f>& uv);
 
         virtual bool Intersect(Ray& ray);
-        int GetMaterial();
-        void SetMaterial(int matId);
 
         bool IntersectFace(Ray& ray, Face& face);
         bool IntersectFace(Ray& ray, uint32_t faceIdx);
@@ -38,7 +36,6 @@ namespace DorkTracer{
         std::vector<Vec3f> vertices;
         std::vector<Vec2f> uv;
 
-        int material_id;
         uint nextFreeNodeIdx = 0;
         int vertexOffset, textureOffset;
         

@@ -277,6 +277,14 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 
 
 
+    // Get BRDFs
+    parseBRDFs(root);
+    element = root->FirstChildElement("BRDFs");
+    while(element)
+    {
+        // Parse ModifiedBlinnPhongBRDF
+        element = element->FirstChildElement("ModifiedBlinnPhong");
+    }
 
     // Get Materials
     element = root->FirstChildElement("Materials");
@@ -1347,5 +1355,33 @@ void DorkTracer::Scene::parseTonemapper(tinyxml2::XMLElement* cameraElm, DorkTra
         
     }
 }
+void DorkTracer::Scene::parseBRDFs(tinyxml2::XMLNode* root)
+{ 
+    // Get BRDFs
+    tinyxml2::XMLElement* element = root->FirstChildElement("BRDFs");
+    if(element)
+    {
+        // Parse ModifiedBlinnPhongBRDF
+        element = element->FirstChildElement("ModifiedBlinnPhong");
+        std::stringstream stream;
+        while(element)
+        {
+            int id = -1;
+            stream << element->Attribute("id") << std::endl;
+            stream >> id;
 
-     
+            bool normalized = false;
+            if(element->Attribute("normalized", "true")){
+                normalized = true;
+            }
+
+            float exponent = 0.0f;
+            stream << element->FirstChildElement("Exponent")->GetText() << std::endl;
+            stream >> exponent;
+
+            // Create and store the BRDF in scene.
+            
+        }
+    }
+}
+    

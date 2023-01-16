@@ -79,6 +79,7 @@ namespace DorkTracer{
         void SetupTextures(DorkTracer::Shape* shape, std::string& texturesInp);
         DorkTracer::BoundingBox transformBoundingBox(DorkTracer::BoundingBox original, DorkTracer::Matrix& transform);
         void parseTonemapper(tinyxml2::XMLElement* cameraElm, DorkTracer::Camera* cam);
+        void parseBRDFs(tinyxml2::XMLNode* root);
 
     };
 }

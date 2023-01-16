@@ -13,7 +13,9 @@ namespace DorkTracer{
 
     class Shape
     {
-        
+    protected:
+        int material_id;
+
     public:
         bool isInstance = false;
         int id;
@@ -31,6 +33,9 @@ namespace DorkTracer{
         Texture* normalMap;
         Texture* bumpMap;
         Texture* replaceAll;
+        
+        int GetMaterial();
+        void SetMaterial(int matId);
 
         Shape() : transform(4,4), inverseTransform(4,4), inverseTransposeTransform(4,4)
         {
@@ -54,6 +59,9 @@ namespace DorkTracer{
         }
         bool HasDiffuseTexture(){
             return diffuseTex != nullptr;
+        }      
+        bool HasSpecularTexture(){
+            return specularTex != nullptr;
         }
         bool HasReplaceAllTexture(){
             return replaceAll != nullptr;

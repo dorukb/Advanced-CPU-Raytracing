@@ -3,6 +3,10 @@
 
 #include <math.h>
 #include <stdint.h>
+
+#define RAD2DEG (180.0f / M_PI)
+#define DEG2RAD (M_PI / 180.0f)
+
 struct Vec3i
 {
     int x, y, z;
@@ -89,6 +93,8 @@ Vec3i clamp(Vec3f rgb);
 int clamp(int x);
 void GetOrthonormalBasis(Vec3f r, Vec3f& u, Vec3f& v);
 Vec3f GetTransformedNormal(Vec3f& tan, Vec3f& bitan, Vec3f& normal, Vec3f& sampledNormal);
+double angleBetweenUnitVectors(Vec3f& v1, Vec3f& v2);
+double cosDeg(double angleInDegrees);
 
 #endif // __helper_h__
 

@@ -32,8 +32,9 @@ namespace DorkTracer
         void IntersectObjects(Ray& ray);
 
         Vec3f GetAmbient(Vec3f& reflectance, Vec3f& ambientLightColor);
-        Vec3f GetDiffuse(Shape* shape, Vec3f& reflectance, Vec3f& w_i, Ray& ray, Vec3f& irradiance);
-        Vec3f GetSpecular(Shape* s, Vec3f& k_s, Ray& ray, float phongExp, Vec3f& w_i, Vec3f& w_o, Vec3f& irradiance);
+        Vec3f GetDiffuse(Ray& ray, Shape* shape, Material& mat, Vec3f& w_i, Vec3f& receivedIrradiance);
+        Vec3f GetSpecular(Ray& ray, Shape* shape, Material& mat, Vec3f& w_in, Vec3f& w_out, Vec3f& receivedIrradiance);
+
         bool IsInShadow(Ray& ray, Vec3f& lightPos);
         bool IsInShadowDirectional(Ray& originalRay, Vec3f& dir);
         bool CastShadowRay(Ray& shadowRay, float lightSourceT);
@@ -44,6 +45,11 @@ namespace DorkTracer
         Vec3f ComputeConductorFresnelReflection(Ray& ray, Material& mat, Vec3f& w_o, int recDepth);
         Vec3f Reflect(Vec3f& normal, Vec3f& w_o, float roughness);
         Vec3f BeersLaw(float x, Vec3f c, Vec3f L_0);
+
+        Vec3f GetDiffuseReflectanceCoeff(Ray& ray, Shape* shape, Material& mat);
+        Vec3f GetSpecularReflectanceCoeff(Ray& ray, Shape* shape, Material& mat);
+
+        Vec3f Shade(Ray& ray, Material& mat, Vec3f& w_i, Vec3f& w_o, Vec3f& receivedIrradiance);
 
         float GetRandom();
         float GetLensSample();

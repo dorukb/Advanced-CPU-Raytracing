@@ -11,12 +11,7 @@ DorkTracer::Mesh::Mesh(std::vector<Vec3f>& vertices, std::vector<Vec2f>& uv)
     this->vertexOffset = 0;
     this->textureOffset = 0;
 }
-int DorkTracer::Mesh::GetMaterial(){
-    return this->material_id;
-}
-void DorkTracer::Mesh::SetMaterial(int matId){
-    this->material_id = matId;
-}
+
 
 Vec2f& DorkTracer::Mesh::GetUv(int idx){
     return this->uv[idx - 1 + textureOffset];

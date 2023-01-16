@@ -72,42 +72,33 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
         return shape->replaceAll->GetRGBSample(ray.hitInfo.hitUV.x, ray.hitInfo.hitUV.y);
     }
 
-
     if(!travellingInsideAnObject)
     {
-        color = color + GetAmbient(mat.ambient, scene.ambient_light);
+        color = GetAmbient(mat.ambient, scene.ambient_light);
         // Repeat for each light source.
-        for(int l = 0; l < scene.point_lights.size(); l++)
+        for(int i = 0; i < scene.point_lights.size(); i++)
         {
             // Skip all calculation if in shadow, no color "contribution".
-            PointLight& light = scene.point_lights[l];
+            PointLight& light = scene.point_lights[i];
             if(IsInShadow(ray, light.position)){
                 continue;
             }
-
             Vec3f w_i = makeUnit(light.position - ray.hitInfo.hitPoint);
-            
             float distToLight = len(light.position - ray.hitInfo.hitPoint);
             Vec3f receivedIrradiance = light.intensity / (distToLight * distToLight);
 
-            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
-            color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, receivedIrradiance);
+            color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
         }    
 
         for(int i = 0; i < scene.areaLights.size(); i++)
         {
-            // Skip all calculation if in shadow, no color "contribution".
             AreaLight* areaLight = scene.areaLights[i];
-            Vec3f samplePos = areaLight->GetSample();
-            // Vec3f samplePos = areaLight->GetSamplePosition(ray.lightSampleX, ray.lightSampleY);
-
-            if(IsInShadow(ray, samplePos)){
+            Vec3f lightSamplePos = areaLight->GetSample();
+            if(IsInShadow(ray, lightSamplePos)){
                 continue;
             }
 
-            // TODO: fix w_i calculation convention across lights.
-
-            Vec3f w_i = samplePos - ray.hitInfo.hitPoint;
+            Vec3f w_i = lightSamplePos - ray.hitInfo.hitPoint;
             float distToLight = len(w_i);
             float dSqr = distToLight * distToLight;
             w_i = w_i / distToLight; // normalize.
@@ -117,23 +108,23 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
                 lCostheta = dot(areaLight->normal, w_i);
             }
             Vec3f receivedIrradiance = areaLight->radiance * (areaLight->area * lCostheta / dSqr);
-          
-            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
-            color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, receivedIrradiance);
+
+            color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
         }        
         for(int i = 0; i < scene.sphericalEnvLights.size(); i++)
         {
             SphericalEnvironmentLight* envLight = scene.sphericalEnvLights[i];
-
+            Vec3f sampleDir = envLight->GetDirection(ray.hitInfo.normal);
+            
+            // TODO: should we cast Shadow ray?
             // if(IsInShadow(ray, samplePos)){
             //     continue;
             // }
-            Vec3f sampleDir = envLight->GetDirection(ray.hitInfo.normal);
+            // TODO: should we cast Shadow ray?
+
             Vec3f receivedIrradiance = envLight->GetSample(sampleDir);
-          
             Vec3f w_i = ray.hitInfo.normal;
-            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
-            color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, receivedIrradiance);
+            color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
         }    
 
         for(int i = 0; i < scene.directionalLights.size(); i++)
@@ -142,10 +133,8 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
             if(IsInShadowDirectional(ray, light->dir)){
                 continue;
             }
-
             Vec3f w_i = -(light->dir);
-            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, light->radiance);
-            color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, light->radiance);
+            color = color + Shade(ray, mat, w_i, w_o, light->radiance);
         }
         
         for(int i = 0; i < scene.spotLights.size(); i++)
@@ -154,13 +143,10 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
             if(IsInShadow(ray, light->pos)){
                 continue;
             }
-
             Vec3f w_i = makeUnit(light->pos - ray.hitInfo.hitPoint);
             Vec3f receivedIrradiance = light->GetIrradiance(ray.hitInfo.hitPoint);
-            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
-            color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, receivedIrradiance);
-        }    
-
+            color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
+        }
     }
  
     if(mat.type == Material::Mirror)
@@ -179,12 +165,19 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
         // Reflection & absorption, no tranmission.
         color = color + ComputeConductorFresnelReflection(ray, mat, w_o, recursionDepth);
     }
-    // Vec3i c = clamp(color);
-    // color.x = c.x;
-    // color.y = c.y;
-    // color.z = c.z;
     
     return color;
+}
+
+Vec3f Raytracer::Shade(Ray& ray, Material& mat, Vec3f& w_i, Vec3f& w_o, Vec3f& Li)
+{
+    Vec3f color;
+    Shape* s = ray.hitInfo.hitShape;
+    if(false) //mat.hasBRDF())
+    {
+
+    }
+    else return GetDiffuse(ray, s, mat, w_i, Li) + GetSpecular(ray, s, mat, w_i, w_o, Li);
 }
 
 Vec3f Raytracer::ComputeConductorFresnelReflection(Ray& originalRay, Material& mat, Vec3f& w_o, int recDepth)
@@ -456,15 +449,13 @@ Vec3f Raytracer::GetAmbient(Vec3f& reflectance, Vec3f& ambientLightColor){
     return ambientLightColor * reflectance;
 }
 
-Vec3f Raytracer::GetDiffuse(Shape* shape, Vec3f& k_d, Vec3f& w_i, Ray& ray, Vec3f& receivedIrradiance)
+Vec3f Raytracer::GetDiffuseReflectanceCoeff(Ray& ray, Shape* shape, Material& mat)
 {
-    Vec3f reflectance = k_d;
+    Vec3f reflectance = mat.diffuse;
     if(shape->HasDiffuseTexture())
     {
-        // TODO: calculate UV for hit point using vertices & texCoords.
         // normalize, obtain k_d in [0,1] range.
         Vec3f textureKd;
-
         if(shape->diffuseTex->IsGenerated()){
             // such as Perlin noise. Sampling process is different.
             auto hp = ray.hitInfo.hitPoint;
@@ -480,32 +471,60 @@ Vec3f Raytracer::GetDiffuse(Shape* shape, Vec3f& k_d, Vec3f& w_i, Ray& ray, Vec3
         if(shape->diffuseTex->operationMode == Texture::OperationMode::Blend)
         {
             //Equally mix the existing material kd value with the tex sample.
-            reflectance = (textureKd + k_d) / 2.0f;
+            reflectance = (textureKd + mat.diffuse) / 2.0f;
         }
         else // Replace/overwrite k_d with tex value
         {
             reflectance = textureKd;
         }
     }
+    return reflectance;
+}
+Vec3f Raytracer::GetSpecularReflectanceCoeff(Ray& ray, Shape* shape, Material& mat)
+{
+    Vec3f reflectance = mat.specular;
+    if(shape->HasSpecularTexture())
+    {
+        // normalize, obtain k_d in [0,1] range.
+        Vec3f textureKs;
+        if(shape->diffuseTex->IsGenerated()){
+            // such as Perlin noise. Sampling process is different.
+            auto hp = ray.hitInfo.hitPoint;
+            float perlinSample = shape->diffuseTex->GetSampleFromWorldPos(hp.x, hp.y, hp.z);
+            textureKs.x = textureKs.y = textureKs.z = perlinSample;
+        }
+        else
+        {
+            Vec2f& uv = ray.hitInfo.hitUV;
+            textureKs = shape->diffuseTex->GetRGBSample(uv.x, uv.y) / 255.0f;
+        }
+
+        if(shape->diffuseTex->operationMode == Texture::OperationMode::Blend)
+        {
+            //Equally mix the existing material kd value with the tex sample.
+            reflectance = (textureKs + mat.diffuse) / 2.0f;
+        }
+        else // Replace/overwrite k_d with tex value
+        {
+            reflectance = textureKs;
+        }
+    }
+    return reflectance;
+}
+Vec3f Raytracer::GetDiffuse(Ray& ray, Shape* shape, Material& mat, Vec3f& w_i, Vec3f& receivedIrradiance)
+{
+    Vec3f reflectance = GetDiffuseReflectanceCoeff(ray, shape, mat);
     float costheta = std::max(0.0f, dot(w_i, ray.hitInfo.normal));
     return reflectance * receivedIrradiance * costheta;
 }
 
-Vec3f Raytracer::GetSpecular(Shape* shape, Vec3f& k_s, Ray& ray, float phongExp, Vec3f& w_in, Vec3f& w_out, Vec3f& receivedIrradiance)
+Vec3f Raytracer::GetSpecular(Ray& ray, Shape* shape, Material& mat, Vec3f& w_i, Vec3f& w_o, Vec3f& receivedIrradiance)
 {
-    Vec3f reflectance = k_s;
-    if(shape->specularTex != nullptr)
-    {
-        // TODO: calculate UV for hit point using vertices & texCoords.
-        // normalize, obtain k_d in [0,1] range.
-        Vec2f& uv = ray.hitInfo.hitUV;
-        Vec3f textureKs = shape->specularTex->GetRGBSample(uv.x, uv.y) / 255.0f;
-        reflectance = textureKs;
-    }
+    Vec3f ks = GetSpecularReflectanceCoeff(ray, shape, mat);
 
-    Vec3f half = (w_in + w_out) / len(w_in + w_out);
+    Vec3f half = (w_i + w_o) / len(w_i + w_o);
     float cosAlpha = std::max(0.0f, dot(ray.hitInfo.normal, half));
-    return reflectance * receivedIrradiance * std::pow(cosAlpha, phongExp);
+    return ks * receivedIrradiance * std::pow(cosAlpha, mat.phong_exponent);
 }
 bool Raytracer::IsInShadowDirectional(Ray& originalRay, Vec3f& lightDir)
 {
