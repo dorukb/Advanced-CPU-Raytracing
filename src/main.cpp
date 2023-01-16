@@ -18,7 +18,8 @@ struct RenderThreadArgs{
     DorkTracer::Raytracer* renderer;
     DorkTracer::Camera* cam;
     int threadIndex;
-    unsigned char *imagePtr;
+    unsigned char *imagePtrLDR;
+    float* imagePtrHDR;
 };
 
 
@@ -27,8 +28,10 @@ void renderThreadMain(RenderThreadArgs args)
     int threadIndex = args.threadIndex;
     DorkTracer::Camera* cam = args.cam;
     DorkTracer::Raytracer* renderer = args.renderer;
-    unsigned char *image = args.imagePtr;
-    
+    renderer->activeCamera = cam;
+
+    unsigned char *ldrImage = args.imagePtrLDR;
+    float *hdrImage = args.imagePtrHDR;
     // calculate the starting and ending indices for width & height using these parameters.
     int width = cam->imageWidth, height = cam->imageHeight;
 
@@ -103,18 +106,26 @@ void renderThreadMain(RenderThreadArgs args)
 
             // // TODO: apply a tonemapping operator instead of simple clamping.
             Vec3i finalColor;
+            uint32_t imgIdx = 3 * (x + y * width);
             if(cam->hasTonemapper)
             {
-                finalColor = cam->GetTonemappedColor(color);
+                // HDR Rendering
+                // finalColor = cam->GetTonemappedColor(color);
+                hdrImage[imgIdx] = color.x;
+                hdrImage[imgIdx+1] = color.y;
+                hdrImage[imgIdx+2] = color.z;
             }
-            else finalColor = clamp(color);
-
-            uint32_t imgIdx = 3 * (x + y * width);
-            image[imgIdx] = finalColor.x;
-            image[imgIdx+1] = finalColor.y;
-            image[imgIdx+2] = finalColor.z;
+            else
+            { 
+                // Regular LDR rendering
+                finalColor = clamp(color);
+                ldrImage[imgIdx] = finalColor.x;
+                ldrImage[imgIdx+1] = finalColor.y;
+                ldrImage[imgIdx+2] = finalColor.z;
+            }
         }
     }
+
 
 }
 
@@ -133,9 +144,15 @@ int main(int argc, char* argv[])
         DorkTracer::Camera& cam = scene.cameras[i];
         int width = cam.imageWidth, height = cam.imageHeight;
         unsigned char* image = new unsigned char [width * height * 3];
+        
+        float *hdrImage = nullptr;
+        if(cam.hasTonemapper)
+        {
+            hdrImage = new float [width*height*3];
+        }
 
-        std::cout<<"Resolution: "<<width <<"x"<<height << std::endl;
-        std::cout<<"Running on: "<<THREAD_COUNT <<" threads." << std::endl;
+        std::cout<<"Resolution: "<<width <<"x"<<height;
+        std::cout<<", Running on: "<<THREAD_COUNT <<" threads." << std::endl;
 
         std::vector<std::thread> renderThreads;
         renderThreads.resize(THREAD_COUNT);
@@ -148,7 +165,8 @@ int main(int argc, char* argv[])
             args[t].cam = &cam;
             args[t].renderer = &renderer;
             args[t].threadIndex = t;
-            args[t].imagePtr = image;
+            args[t].imagePtrLDR = image;
+            args[t].imagePtrHDR = hdrImage;
             renderThreads[t] = std::thread(renderThreadMain, args[t]);
         }
 
@@ -157,7 +175,15 @@ int main(int argc, char* argv[])
             renderThreads[i].join();
         }
 
-        stbi_write_png((cam.imageName + ".png").c_str(), width, height, 3, image, width * 3);
+        if(cam.hasTonemapper)
+        {
+            // Post process the HDR image, tonemap & save as LDR.
+            cam.GetTonemappedImage(width,height, hdrImage, image);
+            stbi_write_hdr(cam.imageName.c_str(), width, height, 3, hdrImage);
+        }
+
+        size_t lastDot = cam.imageName.find_last_of(".");
+        stbi_write_png((cam.imageName.substr(0, lastDot) + ".png").c_str(), width, height, 3, image, width * 3);
     }
 
     

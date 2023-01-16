@@ -32,7 +32,7 @@ namespace DorkTracer
             Vec3f GetImagePlanePosition(int width, int height);
 
             void SetTonemapper(Tonemapper* tonemapper);
-            Vec3i GetTonemappedColor(Vec3f color);
+            void GetTonemappedImage(int width, int height, float* hdrSrc, unsigned char* ldrDest);
         private:
             Vec3f m_w, m_middle, m_q, m_u;
             float m_left, m_right, m_bottom,m_top;

@@ -13,6 +13,7 @@ namespace DorkTracer
 
     public:
         Scene scene;
+        Camera* activeCamera;
         Raytracer(Scene& scene);
         Vec3f RenderPixel(int i, int j, Camera& cam);
 

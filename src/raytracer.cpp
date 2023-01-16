@@ -46,6 +46,11 @@ Vec3f Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
         Vec3f sampledColor = scene.bgTexture->GetRGBSample(u, v);
         return sampledColor;
     }
+    else if( scene.sphericalEnvLights.size() > 0)
+    {
+        // Has environment light, sample that.
+        return scene.sphericalEnvLights[0]->GetSample(ray.dir);
+    }
     else return Vec3f(scene.background_color.x, scene.background_color.y, scene.background_color.z);
 }
 
@@ -100,6 +105,8 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
                 continue;
             }
 
+            // TODO: fix w_i calculation convention across lights.
+
             Vec3f w_i = samplePos - ray.hitInfo.hitPoint;
             float distToLight = len(w_i);
             float dSqr = distToLight * distToLight;
@@ -113,7 +120,22 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
           
             color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
             color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, receivedIrradiance);
+        }        
+        for(int i = 0; i < scene.sphericalEnvLights.size(); i++)
+        {
+            SphericalEnvironmentLight* envLight = scene.sphericalEnvLights[i];
+
+            // if(IsInShadow(ray, samplePos)){
+            //     continue;
+            // }
+            Vec3f sampleDir = envLight->GetDirection(ray.hitInfo.normal);
+            Vec3f receivedIrradiance = envLight->GetSample(sampleDir);
+          
+            Vec3f w_i = ray.hitInfo.normal;
+            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
+            color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, receivedIrradiance);
         }    
+
         for(int i = 0; i < scene.directionalLights.size(); i++)
         {
             DirectionalLight* light = scene.directionalLights[i];
@@ -125,6 +147,20 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
             color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, light->radiance);
             color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, light->radiance);
         }
+        
+        for(int i = 0; i < scene.spotLights.size(); i++)
+        {
+            SpotLight* light = scene.spotLights[i];
+            if(IsInShadow(ray, light->pos)){
+                continue;
+            }
+
+            Vec3f w_i = makeUnit(light->pos - ray.hitInfo.hitPoint);
+            Vec3f receivedIrradiance = light->GetIrradiance(ray.hitInfo.hitPoint);
+            color = color + GetDiffuse(shape, mat.diffuse, w_i, ray, receivedIrradiance);
+            color = color + GetSpecular(shape, mat.specular, ray, mat.phong_exponent, w_i, w_o, receivedIrradiance);
+        }    
+
     }
  
     if(mat.type == Material::Mirror)
@@ -293,6 +329,12 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Ray& originalRa
                 // non-vacuum, attenuate
                 reflectedRaysColor = BeersLaw(reflectedRay.hitInfo.minT, mat.absorptionCoefficient, reflectedRaysColor);
             }
+        }    
+        else if(scene.sphericalEnvLights.size() > 0)
+        {
+            // Has environment light, sample that.
+            SphericalEnvironmentLight* envLight = scene.sphericalEnvLights[0];
+            reflectedRaysColor = envLight->GetSample(reflectedRay.dir);
         }
        
         // BUT also do refraction, 1 ray split into 2 rays in total.
@@ -340,6 +382,12 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Ray& originalRa
                     // non-vacuum, attenuate
                     refractedRaysColor = BeersLaw(refractedRay.hitInfo.minT, mat.absorptionCoefficient, refractedRaysColor);
                 }
+            }
+            else if(scene.sphericalEnvLights.size() > 0)
+            {
+                // Has environment light, sample that instead of empty black.
+                SphericalEnvironmentLight* envLight = scene.sphericalEnvLights[0];
+                refractedRaysColor = envLight->GetSample(reflectedRay.dir);
             }
         }
         return reflectedRaysColor * rReflect + refractedRaysColor * rRefract;
@@ -391,7 +439,16 @@ Vec3f Raytracer::ComputeMirrorReflection(Ray& originalRay, Material& mat, Vec3f&
         {
             return mat.mirror * PerformShading(reflectedRay, reflectedRay.origin, recursionDepth-1);
         }
-        else return Vec3f{0,0,0};
+        else if(scene.sphericalEnvLights.size() > 0)
+        {
+            // Has environment light, sample that.
+            SphericalEnvironmentLight* envLight = scene.sphericalEnvLights[0];
+
+            // Vec3f sampleDir = envLight->GetDirection(originalRay.hitInfo.normal);
+            Vec3f receivedIrradiance = envLight->GetSample(reflectedRay.dir);
+            return mat.mirror * receivedIrradiance;
+        }
+        else return Vec3f{0,0,0}; 
     }
 }
 
@@ -534,6 +591,13 @@ void Raytracer::IntersectObjects(Ray& ray)
         Shape* s = scene.triangles[i];
         s->Intersect(ray);
     }
+
+    // If missed all objects, Intersect with the Spherical Environment Map (or Skybox)
+    if(!ray.hitInfo.hasHit)
+    {
+
+    }
+
 }
 
 

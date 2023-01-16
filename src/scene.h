@@ -12,6 +12,8 @@
 #include "tinyxml2.h"
 #include "areaLight.h"
 #include "directionalLight.h"
+#include "spotLight.h"
+#include "sphericalEnvironmentLight.h"
 #include "texture.h"
 
 #include "image.h"
@@ -46,6 +48,9 @@ namespace DorkTracer{
         std::vector<PointLight> point_lights;
         std::vector<AreaLight*> areaLights;
         std::vector<DirectionalLight*> directionalLights;
+        std::vector<SphericalEnvironmentLight*> sphericalEnvLights;
+
+        std::vector<SpotLight*> spotLights;
         std::vector<Material> materials;
 
         std::vector<Vec3f> vertex_data;

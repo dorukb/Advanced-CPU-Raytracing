@@ -85,7 +85,8 @@ void Camera::SetTonemapper(Tonemapper* tonemapper)
     this->hasTonemapper = tonemapper != nullptr;
 }
 
-Vec3i Camera::GetTonemappedColor(Vec3f color)
+
+void Camera::GetTonemappedImage(int width, int height, float* hdrSrc, unsigned char* ldrDest)
 {
-    return this->tonemapper->GetTonemappedColor(color);
+    this->tonemapper->Tonemap(width, height, hdrSrc, ldrDest);
 }
