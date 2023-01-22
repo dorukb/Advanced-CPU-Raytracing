@@ -153,7 +153,7 @@ int clamp(int x)
 
 double angleBetweenUnitVectors(Vec3f& v1, Vec3f& v2)
 {
-    return std::acos(dot(v1, v2)) * RAD2DEG;
+    return std::acos(std::min(1.0f, std::max(-1.0f, dot(v1, v2)))) * RAD2DEG;
 }
 double cosDeg(double angleInDegrees)
 {

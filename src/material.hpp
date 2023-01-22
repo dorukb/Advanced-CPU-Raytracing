@@ -1,8 +1,7 @@
 #ifndef __DORKTRACER_MATERIAL__
 #define __DORKTRACER_MATERIAL__
 
-
-#include "helperMath.h"
+#include "brdf.h"
 
 namespace DorkTracer{
 
@@ -16,9 +15,13 @@ namespace DorkTracer{
             Mirror,
             Dielectric,
             Conductor,
+            Emissive,
             Default
         };
 
+        int id;
+        BRDF* brdf = nullptr;
+        
         Vec3f ambient;
         Vec3f diffuse;
         Vec3f specular;
@@ -29,7 +32,17 @@ namespace DorkTracer{
         Vec3f absorptionCoefficient;
         float conductorAbsorptionIndex;
         float roughness;
-
+        Vec3f radiance; // only for emissive mats.
+        
+        void SetBRDF(BRDF* brdf)
+        {
+            this->brdf = brdf;
+        }
+        bool HasBRDF()
+        {
+            return brdf != nullptr;
+        }
+        
     private:
         
     };

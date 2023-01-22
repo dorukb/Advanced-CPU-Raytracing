@@ -108,6 +108,7 @@ namespace DorkTracer{
         Vec3f n;
         Vec3f center;
         BoundingBox bbox;
+        double area;
     };
 
 

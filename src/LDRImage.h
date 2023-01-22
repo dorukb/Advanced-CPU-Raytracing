@@ -36,7 +36,7 @@ namespace DorkTracer
         {
             image = stbi_load(filename.c_str(), &width, &height, &channels, 0);
             if(image == NULL) {
-                printf("Error in loading the image\n");
+                printf("Error in loading the image: %s\n", filename.c_str());
             }
             printf("Loaded image with a width of %dpx, a height of %dpx and %d channels\n", width, height, channels);
         } 

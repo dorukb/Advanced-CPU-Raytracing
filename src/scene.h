@@ -14,13 +14,15 @@
 #include "directionalLight.h"
 #include "spotLight.h"
 #include "sphericalEnvironmentLight.h"
-#include "texture.h"
+#include "meshLight.h"
 
+#include "texture.h"
 #include "image.h"
 #include "texture.h"
 #include "imageTexture.h"
 #include "perlinTexture.h"
 #include "tonemapper.h"
+#
 
 namespace DorkTracer{
 
@@ -49,6 +51,7 @@ namespace DorkTracer{
         std::vector<AreaLight*> areaLights;
         std::vector<DirectionalLight*> directionalLights;
         std::vector<SphericalEnvironmentLight*> sphericalEnvLights;
+        std::vector<MeshLight*> meshLights;
 
         std::vector<SpotLight*> spotLights;
         std::vector<Material> materials;
@@ -66,6 +69,7 @@ namespace DorkTracer{
 
         std::vector<Texture*> textures;
         std::vector<Image*> images;
+        std::vector<BRDF*> brdfs;
 
         void loadFromXml(const std::string &filepath);
         void computeFaceNormal(Face& face, Mesh* mesh);
@@ -76,10 +80,16 @@ namespace DorkTracer{
         void computeFaceCenter(Face& face, Mesh* mesh);
         void computeFaceProperties(DorkTracer::Face& face, Mesh* mesh);
         void computeTransform(DorkTracer::Shape* shape, std::string input);
+        void computeFaceArea(DorkTracer::Face& face, Mesh* mesh);
+
         void SetupTextures(DorkTracer::Shape* shape, std::string& texturesInp);
         DorkTracer::BoundingBox transformBoundingBox(DorkTracer::BoundingBox original, DorkTracer::Matrix& transform);
         void parseTonemapper(tinyxml2::XMLElement* cameraElm, DorkTracer::Camera* cam);
         void parseBRDFs(tinyxml2::XMLNode* root);
+        void parseMaterials(tinyxml2::XMLNode* root);
+        void parseLights(tinyxml2::XMLNode* root);
+        void parseMeshes(tinyxml2::XMLNode* root, std::string elemName);
+
 
     };
 }

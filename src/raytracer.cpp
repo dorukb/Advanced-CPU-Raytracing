@@ -8,8 +8,9 @@ Raytracer::Raytracer(Scene& scene){
     this->scene = scene;
 
     this->roughnessRandomGenerator = std::mt19937(rand());
-    this->roughnessRandomDistro =  std::uniform_real_distribution<>(-0.5f, 0.5f);
-    
+    // this->roughnessRandomDistro =  std::uniform_real_distribution<>(-0.5f, 0.5f);
+    this->roughnessRandomDistro =  std::uniform_real_distribution<>(0.0f, 1.0f);
+
     this->dofLensSampleGenerator = std::mt19937(rand());
     this->dofLensSampleDistro = std::uniform_real_distribution<>(-1.0f, 1.0f);
 }
@@ -56,6 +57,8 @@ Vec3f Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
 
 Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
 {
+    if(recursionDepth == 0) return Vec3f(0,0,0);
+
     ray.hitInfo.hitPoint = ray.origin + ray.dir * ray.hitInfo.minT;
     // Actually perform shading, depending on Material type.
 
@@ -67,6 +70,12 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
     float refractiveIndexOfVacuum = 1.00001;
     bool travellingInsideAnObject = ray.refractiveIndexOfCurrentMedium > refractiveIndexOfVacuum;
 
+
+    if(mat.type == Material::Emissive)
+    {
+        return mat.radiance * 2.0f * M_PI;
+    }
+
     // If Replace_all mode, disable shading, directly output texture color.
     if(shape->HasReplaceAllTexture()){
         return shape->replaceAll->GetRGBSample(ray.hitInfo.hitUV.x, ray.hitInfo.hitUV.y);
@@ -74,7 +83,11 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
 
     if(!travellingInsideAnObject)
     {
-        color = GetAmbient(mat.ambient, scene.ambient_light);
+        color = color + GetAmbient(mat.ambient, scene.ambient_light);
+        if(isnan(color.x) || isnan(color.y) || isnan(color.z)){
+                std::cout<<"nan color!!" << std::endl;
+                exit(1);
+        }
         // Repeat for each light source.
         for(int i = 0; i < scene.point_lights.size(); i++)
         {
@@ -147,8 +160,47 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
             Vec3f receivedIrradiance = light->GetIrradiance(ray.hitInfo.hitPoint);
             color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
         }
+
+        for(int i = 0; i < scene.meshLights.size(); i++)
+        {
+            MeshLight* light = scene.meshLights[i];
+
+            Vec3f lightSamplePos, lightNormal;
+            double weight;
+            light->getSample(lightSamplePos, lightNormal, weight);
+
+            if(IsInShadow(ray, lightSamplePos)){
+                continue;
+            }     
+            Vec3f w_i = lightSamplePos - ray.hitInfo.hitPoint;
+            float distToLight = len(w_i);
+            float dSqr = distToLight * distToLight;
+            w_i = w_i / distToLight; // normalize.
+            
+            if(isnan(w_i.x) || isnan(w_i.y) || isnan(w_i.z)){
+                std::cout<<"nan w_i!!" << std::endl;
+            }
+            float lCostheta = dot(lightNormal, -w_i);
+            if(lCostheta < 0){
+                lCostheta = dot(lightNormal, w_i);
+            }
+
+            Vec3f rad= light->radiance * weight * 2 * M_PI;
+            color = color + Shade(ray, mat, w_i, w_o, rad);
+
+            if(isnan(color.x) || isnan(color.y) || isnan(color.z))
+            {
+                std::cout<<"nan color!!" << std::endl;
+                exit(1);
+            }
+        }
     }
  
+    if(isnan(color.x) || isnan(color.y) || isnan(color.z)){
+                std::cout<<"nan color!!" << std::endl;
+                exit(1);
+    }
+
     if(mat.type == Material::Mirror)
     {
         // Compute radiance along the ideal reflection ray
@@ -165,17 +217,84 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
         // Reflection & absorption, no tranmission.
         color = color + ComputeConductorFresnelReflection(ray, mat, w_o, recursionDepth);
     }
-    
+
+     if(isnan(color.x) || isnan(color.y) || isnan(color.z)){
+                std::cout<<"nan color!!" << std::endl;
+                exit(1);
+        }
+
+    // send global illumination ray here.
+    color = color + ComputeGlobalIllumination(ray, mat, w_o, recursionDepth);
+
+    if(isnan(color.x) || isnan(color.y) || isnan(color.z)){
+                std::cout<<"nan color!!" << std::endl;
+                exit(1);
+        }
+
     return color;
 }
+Vec3f Raytracer::ComputeGlobalIllumination(Ray& ray, Material& orgMat, Vec3f& w_o, int recDepth)
+{ 
+    if(recDepth == 0){
+        return Vec3f{0,0,0}; 
+    }
 
+    float rand1 = GetRandom(); // [0,1]
+    float rand2 = GetRandom(); // [0,1]
+
+    float phi = 2 * M_PI * rand1;
+    float theta = std::acos(rand2); // uniform
+    // float theta = std::asin(std::sqrt(rand2)); // Importance
+
+    // construct ONB -> uvw, whetere v is aligned with surface normal at hit point.
+    Vec3f u,v;
+    GetOrthonormalBasis(ray.hitInfo.normal, u, v);
+    Vec3f newDir = u * std::sin(theta) * std::cos(phi) 
+                 + ray.hitInfo.normal * std::cos(theta)
+                 + v * std::sin(theta) * std::sin(phi);
+
+    newDir = makeUnit(newDir);
+
+    // Create new ray
+    Vec3f newOrigin = ray.hitInfo.hitPoint + ray.hitInfo.normal * 0.0001;
+    Ray globalRay = GenerateSecondaryRay(ray, newDir, newOrigin);
+
+    // cast the new ray
+    IntersectObjects(globalRay);
+    Vec3f globalRaysColor{0,0,0}; 
+    if(globalRay.hitInfo.hasHit)
+    {
+        Material& mat = scene.materials[globalRay.hitInfo.matId-1];
+        // if(mat.type != Material::Emissive){
+        // do not sample lights, this is an indirect lighting pass.
+        Vec3f transferredLight = PerformShading(globalRay, globalRay.origin, recDepth-1);
+        
+        if(isnan(transferredLight.x) || isnan(transferredLight.y) || isnan(transferredLight.z))
+        {
+            std::cout<<"nan transferredLight!!" << std::endl;
+            return Vec3f{0,0,0};
+        }    
+
+        globalRaysColor = Shade(ray, orgMat, globalRay.dir, w_o, transferredLight) * 2.0f *M_PI;
+    }
+    return globalRaysColor;
+}
 Vec3f Raytracer::Shade(Ray& ray, Material& mat, Vec3f& w_i, Vec3f& w_o, Vec3f& Li)
 {
     Vec3f color;
     Shape* s = ray.hitInfo.hitShape;
-    if(false) //mat.hasBRDF())
+    if(mat.HasBRDF())
     {
-
+        float costheta_i = std::max(0.0f, dot(w_i, ray.hitInfo.normal));
+        Vec3f kd = GetDiffuseReflectanceCoeff(ray, s, mat);
+        Vec3f ks = GetSpecularReflectanceCoeff(ray, s, mat);
+        Vec3f res =  mat.brdf->apply(mat, kd, ks, w_i, w_o, ray.hitInfo.normal) * Li * costheta_i;
+        if(isnan(res.x) || isnan(res.y) || isnan(res.z))
+        {
+            std::cout<<"nan res!!" << std::endl;
+            return Vec3f{0,0,0};
+        }
+        return res;
     }
     else return GetDiffuse(ray, s, mat, w_i, Li) + GetSpecular(ray, s, mat, w_i, w_o, Li);
 }
@@ -561,8 +680,12 @@ bool Raytracer::CastShadowRay(Ray& shadowRay, float lightSourceT)
     for(int i = 0; i < scene.meshes.size(); i++)
     {
         Shape* mesh = scene.meshes[i];
-        mesh->Intersect(shadowRay);
+        if(scene.materials[mesh->GetMaterial()-1].type == Material::Emissive){
+            // skip light objects
+            continue;
+        }
 
+        mesh->Intersect(shadowRay);
         if(shadowRay.hitInfo.hasHit && shadowRay.hitInfo.minT < lightSourceT)
         {
             // valid hit, in shadow.

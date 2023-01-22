@@ -16,6 +16,7 @@ namespace DorkTracer{
         
         BoundingBox bbox;
         std::vector<BVH> bvh;
+        double surfaceArea;
 
         Mesh(std::vector<Vec3f>& vertices, std::vector<Vec2f>& uv);
 

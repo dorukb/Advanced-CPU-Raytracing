@@ -2,15 +2,23 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <limits>
 
 #include "happly.h"
 #include "scene.h"
-#include <limits>
 #include "matrix.hpp"
 #include "instancedMesh.hpp"
 #include "HDRImage.h"
 #include "LDRImage.h"
 #include "spotLight.h"
+#include "meshLight.h"
+
+#include "brdfModifiedBlinnPhong.h"
+#include "brdfBlinnPhong.h"
+#include "brdfPhong.h"
+#include "brdfModifiedPhong.h"
+#include "brdfTorranceSparrow.h"
+#include "brdf.h"
 
 using namespace DorkTracer;
 
@@ -18,6 +26,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
 {
     tinyxml2::XMLDocument file;
     std::stringstream stream;
+    tinyxml2::XMLElement *child, *element;
 
     auto res = file.LoadFile(filepath.c_str());
     if (res)
@@ -34,16 +43,13 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     this->isMotionBlurEnabled = false;
 
     //Get BackgroundColor
-    auto element = root->FirstChildElement("BackgroundColor");
+    background_color = Vec3i(0,0,0);
+    element = root->FirstChildElement("BackgroundColor");
     if (element)
     {
         stream << element->GetText() << std::endl;
+        stream >> background_color.x >> background_color.y >> background_color.z;
     }
-    else
-    {
-        stream << "0 0 0" << std::endl;
-    }
-    stream >> background_color.x >> background_color.y >> background_color.z;
 
     //Get ShadowRayEpsilon
     element = root->FirstChildElement("ShadowRayEpsilon");
@@ -52,17 +58,15 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
         stream << element->GetText() << std::endl;
         stream >> Scene::shadow_ray_epsilon;
     }
+
     //Get MaxRecursionDepth
+    max_recursion_depth = 0;
     element = root->FirstChildElement("MaxRecursionDepth");
     if (element)
     {
         stream << element->GetText() << std::endl;
+        stream >> max_recursion_depth;
     }
-    else
-    {
-        stream << "0" << std::endl;
-    }
-    stream >> max_recursion_depth;
 
     //Get Cameras
     element = root->FirstChildElement("Cameras");
@@ -102,6 +106,9 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
             float fovY;
 
             child = element->FirstChildElement("GazePoint");
+            if(child == NULL){
+                child = element->FirstChildElement("Gaze");
+            }
             stream << child->GetText() << std::endl;
             stream >> gazePoint.x >> gazePoint.y >> gazePoint.z;
 
@@ -158,275 +165,13 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     }
 
     //Get Lights
-    element = root->FirstChildElement("Lights");
-    auto child = element->FirstChildElement("AmbientLight");
-    if(child){
-        stream << child->GetText() << std::endl;
-        stream >> ambient_light.x >> ambient_light.y >> ambient_light.z;
-    }
-    else{
-        ambient_light = {0,0,0};
-    }
-    element = element->FirstChildElement("PointLight");
-    PointLight point_light;
-    while (element)
-    {
-        child = element->FirstChildElement("Position");
-        stream << child->GetText() << std::endl;
-        child = element->FirstChildElement("Intensity");
-        stream << child->GetText() << std::endl;
+    parseLights(root);
 
-        stream >> point_light.position.x >> point_light.position.y >> point_light.position.z;
-        stream >> point_light.intensity.x >> point_light.intensity.y >> point_light.intensity.z;
-
-        point_lights.push_back(point_light);
-        element = element->NextSiblingElement("PointLight");
-    }
-
-    element = root->FirstChildElement("Lights");
-    element = element->FirstChildElement("AreaLight");
-    while (element)
-    {
-        Vec3f pos,normal, radiance;
-        float size;
-        int id;
-        
-        stream << element->Attribute("id") << std::endl;
-        stream >> id;
-        
-        child = element->FirstChildElement("Position");
-        stream << child->GetText() << std::endl;
-        stream >> pos.x >> pos.y >> pos.z;
-
-        child = element->FirstChildElement("Normal");
-        stream << child->GetText() << std::endl;
-        stream >> normal.x >> normal.y >> normal.z;
-        
-        child = element->FirstChildElement("Radiance");
-        stream << child->GetText() << std::endl;
-        stream >> radiance.x >> radiance.y >> radiance.z;
-
-        child = element->FirstChildElement("Size");
-        stream << child->GetText() << std::endl;
-        stream >> size;
-
-        areaLights.push_back(new AreaLight(id, pos, normal, radiance, size));
-
-        element = element->NextSiblingElement("AreaLight");
-    }
-
-    element = root->FirstChildElement("Lights");
-    element = element->FirstChildElement("DirectionalLight");
-    while (element)
-    {
-        Vec3f radiance, dir;
-        int id;
-        
-        stream << element->Attribute("id") << std::endl;
-        stream >> id;
-        
-
-        child = element->FirstChildElement("Direction");
-        stream << child->GetText() << std::endl;
-        stream >> dir.x >> dir.y >> dir.z;
-        
-        child = element->FirstChildElement("Radiance");
-        stream << child->GetText() << std::endl;
-        stream >> radiance.x >> radiance.y >> radiance.z;
-
-        directionalLights.push_back(new DirectionalLight(id, dir, radiance));
-
-        element = element->NextSiblingElement("DirectionalLight");
-    }
-
-    element = root->FirstChildElement("Lights");
-    element = element->FirstChildElement("SpotLight");
-    while (element)
-    {
-        Vec3f pos, dir, intensity;
-        int id;
-        float coverageAngle, falloffAngle;
-        
-        stream << element->Attribute("id") << std::endl;
-        stream >> id;
-        
-        child = element->FirstChildElement("Position");
-        stream << child->GetText() << std::endl;
-        stream >> pos.x >> pos.y >> pos.z;
-
-        child = element->FirstChildElement("Direction");
-        stream << child->GetText() << std::endl;
-        stream >> dir.x >> dir.y >> dir.z;
-        
-        child = element->FirstChildElement("Intensity");
-        stream << child->GetText() << std::endl;
-        stream >> intensity.x >> intensity.y >> intensity.z;
-
-        child = element->FirstChildElement("CoverageAngle");
-        stream << child->GetText() << std::endl;
-        stream >> coverageAngle;
-
-        child = element->FirstChildElement("FalloffAngle");
-        stream << child->GetText() << std::endl;
-        stream >> falloffAngle;
-
-        spotLights.push_back(new SpotLight(id, pos, dir, intensity, coverageAngle, falloffAngle));
-
-        element = element->NextSiblingElement("SpotLight");
-    }
-
-
-
-    // Get BRDFs
+    // Get BRDFs, must perform before parsing Materials.
     parseBRDFs(root);
-    element = root->FirstChildElement("BRDFs");
-    while(element)
-    {
-        // Parse ModifiedBlinnPhongBRDF
-        element = element->FirstChildElement("ModifiedBlinnPhong");
-    }
 
     // Get Materials
-    element = root->FirstChildElement("Materials");
-    element = element->FirstChildElement("Material");
-    DorkTracer::Material material;
-    while (element)
-    {
-        if((element->Attribute("type", "mirror") != NULL))
-        {
-            material.type = DorkTracer::Material::Mirror;
-        }
-        else if((element->Attribute("type", "dielectric") != NULL)){
-            material.type = DorkTracer::Material::Dielectric;
-        }
-        else if((element->Attribute("type", "conductor") != NULL)){
-            material.type = DorkTracer::Material::Conductor;
-        }
-        else{
-            material.type = DorkTracer::Material::Default;
-        }
-
-        bool degamma = false;
-        float gamma = 2.2f;
-        if(element->Attribute("degamma", "true"))
-        {
-            degamma = true;
-        }
-
-        child = element->FirstChildElement("AmbientReflectance");
-        if(child != NULL)
-        {
-            stream << child->GetText() << std::endl;
-            stream >> material.ambient.x >> material.ambient.y >> material.ambient.z;
-            if(degamma)
-            {
-                material.ambient.x = std::pow(material.ambient.x, gamma);
-                material.ambient.y = std::pow(material.ambient.y, gamma);
-                material.ambient.z = std::pow(material.ambient.z, gamma);
-            }
-        }
-
-        child = element->FirstChildElement("DiffuseReflectance");
-        if( child != NULL){
-            stream << child->GetText() << std::endl;
-            stream >> material.diffuse.x >> material.diffuse.y >> material.diffuse.z;
-    
-            if(degamma)
-            {
-                material.diffuse.x = std::pow(material.diffuse.x, gamma);
-                material.diffuse.y = std::pow(material.diffuse.y, gamma);
-                material.diffuse.z = std::pow(material.diffuse.z, gamma);
-                std::cout <<"diffuse after degamma: " << material.diffuse.x << std::endl;
-            }
-        }
-
-        child = element->FirstChildElement("SpecularReflectance");
-        if( child != NULL){
-            stream << child->GetText() << std::endl;
-            stream >> material.specular.x >> material.specular.y >> material.specular.z;
-      
-            if(degamma)
-            {
-                material.specular.x = std::pow(material.specular.x, gamma);
-                material.specular.y = std::pow(material.specular.y, gamma);
-                material.specular.z = std::pow(material.specular.z, gamma);
-            }
-        }
-
-        child = element->FirstChildElement("MirrorReflectance");
-        if( child != NULL){
-            stream << child->GetText() << std::endl;
-            stream >> material.mirror.x >> material.mirror.y >> material.mirror.z;
-     
-            if(degamma)
-            {
-                material.mirror.x = std::pow(material.mirror.x, gamma);
-                material.mirror.y = std::pow(material.mirror.y, gamma);
-                material.mirror.z = std::pow(material.mirror.z, gamma);
-            }
-        }
-        else
-        {
-            material.mirror.x = material.mirror.y = material.mirror.z = 0.0f;
-        }
-
-        child = element->FirstChildElement("RefractionIndex");
-        if( child != NULL){
-            stream << child->GetText() << std::endl;
-            stream >> material.refractiveIndex;
-        }else
-        {
-            material.refractiveIndex = 1.0f;
-        }
-
-        child = element->FirstChildElement("AbsorptionCoefficient");
-        if( child != NULL){
-            stream << child->GetText() << std::endl;
-            stream >> material.absorptionCoefficient.x >>  material.absorptionCoefficient.y >> material.absorptionCoefficient.z;
-            // if(material.absorptionCoefficient.y <= 0.0){
-            //     std::cout<<"add some\n";
-            //     material.absorptionCoefficient.y += 0.01;
-            //     std::cout<<"y is:\n" << material.absorptionCoefficient.y;
-            // }
-        }else
-        {
-            material.absorptionCoefficient = Vec3f{0,0,0};
-        }
-
-        child = element->FirstChildElement("AbsorptionIndex");
-        if( child != NULL){
-            stream << child->GetText() << std::endl;
-            stream >> material.conductorAbsorptionIndex;
-        }else
-        {
-            material.conductorAbsorptionIndex = 0.0f;
-        }
-        
-        child = element->FirstChildElement("PhongExponent");
-        if( child != NULL)
-        {
-            stream << child->GetText() << std::endl;
-            stream >> material.phong_exponent;
-        }
-        else{
-            material.phong_exponent = 1.0f;
-        }
-
-        child = element->FirstChildElement("Roughness");
-        if( child != NULL)
-        {
-            stream << child->GetText() << std::endl;
-            stream >> material.roughness;
-        }
-        else{
-            material.roughness = 0.0f;
-        }
-
-
-        materials.push_back(material);
-        element = element->NextSiblingElement("Material");
-    }
-
+    parseMaterials(root);
 
     // Get Textures
     this->bgTexture = nullptr;
@@ -575,35 +320,38 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     }
 
 
-    // Parse Envrionemnt lights after Images are parsed to obtain the image pointer.
+    // Parse Environment lights after Images are parsed, to obtain the image pointer.
     element = root->FirstChildElement("Lights");
-    element = element->FirstChildElement("SphericalDirectionalLight");
-    while (element)
+    if(element)
     {
-        int id, imageId;
-        
-        stream << element->Attribute("id") << std::endl;
-        stream >> id;
+        element = element->FirstChildElement("SphericalDirectionalLight");
+        while (element)
+        {
+            int id, imageId;
+            
+            stream << element->Attribute("id") << std::endl;
+            stream >> id;
 
-        child = element->FirstChildElement("ImageId");
-        stream << child->GetText() << std::endl;
-        stream >> imageId;
-        
-        Image* img = nullptr;
-        for(int i = 0; i < this->images.size(); i++){
-            if(images[i]->id == imageId){
-                img = images[i];
-                break;
+            child = element->FirstChildElement("ImageId");
+            stream << child->GetText() << std::endl;
+            stream >> imageId;
+            
+            Image* img = nullptr;
+            for(int i = 0; i < this->images.size(); i++){
+                if(images[i]->id == imageId){
+                    img = images[i];
+                    break;
+                }
             }
+            if(img == nullptr){
+                std::cout<<"couldnt get img with id: " <<imageId <<std::endl;
+            }
+            sphericalEnvLights.push_back(new SphericalEnvironmentLight(id, img));
+            element = element->NextSiblingElement("SphericalDirectionalLight");
         }
-        if(img == nullptr){
-            std::cout<<"couldnt get img with id: " <<imageId <<std::endl;
-        }
-        sphericalEnvLights.push_back(new SphericalEnvironmentLight(id, img));
-        element = element->NextSiblingElement("SphericalDirectionalLight");
+        stream.clear();
     }
-    stream.clear();
-
+    
 
     // Get VertexData
     element = root->FirstChildElement("VertexData");
@@ -689,172 +437,8 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     stream.clear();
 
     // Get Meshes
-    element = root->FirstChildElement("Objects");
-    element = element->FirstChildElement("Mesh");
-    while (element)
-    {
-        child = element->FirstChildElement("Faces");
-        bool hasPlyData = child->Attribute("plyFile") != NULL;
-
-        DorkTracer::Mesh* mesh;
-
-        if(hasPlyData)
-        {
-            std::vector<Vec3f> meshVertices;
-            std::vector<Vec2f> meshUV;
-            mesh = new DorkTracer::Mesh(meshVertices, meshUV);
-        }
-        else{
-            mesh = new DorkTracer::Mesh(this->vertex_data, this->texCoords);
-        }
-        mesh->isInstance = false;
-
-        stream << element->Attribute("id") << std::endl;
-        stream >> mesh->id;
-
-        // Setup textures
-        child = element->FirstChildElement("Textures");
-        if(child){
-            std::string texturesInp;
-            texturesInp = child->GetText();
-            texturesInp += " ";
-            SetupTextures(mesh, texturesInp);
-        }
-        // Compute Model, invModel and invTransModel matrices from given transformations.
-        child = element->FirstChildElement("Transformations");
-
-        mesh->transform.MakeIdentity();
-        mesh->inverseTransform.MakeIdentity();
-        mesh->inverseTransposeTransform.MakeIdentity();
-
-        if(child != nullptr)
-        {
-            std::string input = child->GetText();
-            computeTransform(mesh, input);
-        }
-
-        // Common ops to both cases.
-        child = element->FirstChildElement("Material");
-        stream << child->GetText() << std::endl;
-        int matId = 0;
-        stream >> matId;
-        mesh->SetMaterial(matId);
-
-        // parse motion blur
-        // <MotionBlur>0 0 4</MotionBlur>
-        child = element->FirstChildElement("MotionBlur");
-        if(child != nullptr)
-        {
-            stream << child->GetText() << std::endl;
-            stream >> mesh->motionBlurVector.x >> mesh->motionBlurVector.y >> mesh->motionBlurVector.z;
-
-            mesh->hasMotionBlur = true;
-            // enable motior blur globally even if only one object is using it.
-            this->isMotionBlurEnabled = true; 
-        }
-        else{
-            mesh->hasMotionBlur = false;
-            mesh->motionBlurVector = Vec3f(0.0f,0.0f,0.0f);
-        }
-
-        child = element->FirstChildElement("Faces");
-
-        int vertexOffset = 0;
-        if(child->Attribute("vertexOffset") != NULL){
-            stream << child->Attribute("vertexOffset") << std::endl;
-            stream >> vertexOffset;
-        }
-        int textureOffset = 0;
-        if(child->Attribute("textureOffset") != NULL){
-            stream << child->Attribute("textureOffset") << std::endl;
-            stream >> textureOffset;
-        }
-        mesh->SetAccessOffsets(vertexOffset, textureOffset);
-
-        BoundingBox bbox;
-        bbox.maxCorner.x = bbox.maxCorner.y = bbox.maxCorner.z = std::numeric_limits<float>::min();
-        bbox.minCorner.x = bbox.minCorner.y = bbox.minCorner.z = std::numeric_limits<float>::max();
-        
-        if(hasPlyData)
-        {
-            // Face data is given as plyFile
-            std::string filename;
-            stream << child->Attribute("plyFile");
-            stream >> filename;
-            // std::cout <<"Ply Filename:"<<filename<<std::endl;
-            // Construct the data object by reading from file
-            happly::PLYData plyIn(child->Attribute("plyFile"));
-
-            std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
-            for(int i = 0; i < vPos.size(); i++){
-                Vec3f vert { vPos[i][0], vPos[i][1], vPos[i][2]};
-                mesh->AddVertex(vert);
-            }
-            vPos.clear();
-
-            // for(auto str : plyIn.getElementNames()){
-            //     std::cout << str << std::endl;
-            // }
-            std::vector<std::vector<int>> fInd = plyIn.getFaceIndices<int>();
-            std::cout<<"has: "<<  fInd.size() << " Triangles."<< std::endl;
-            for(int i = 0; i < fInd.size(); i++)
-            {
-                if(fInd[i].size() == 3){
-                    // ply format is 0 base indexed, whereas rest of our project uses 1-based indexing, so add that offset.
-                    DorkTracer::Face face = createFace(fInd[i][0]+1, fInd[i][1] + 1, fInd[i][2] + 1, mesh);
-
-                    // calculate bbox of the owner mesh here
-                    updateBBox(&bbox, face);
-                    mesh->faces.push_back(face);
-                }
-                else if(fInd[i].size() == 4)
-                {
-                    // ply format is 0 base indexed, whereas rest of our project uses 1-based indexing, so add that offset.
-                    DorkTracer::Face face1 = createFace(fInd[i][0]+1, fInd[i][1] + 1, fInd[i][2] + 1, mesh);
-                    updateBBox(&bbox, face1);
-                    mesh->faces.push_back(face1);
-
-                    DorkTracer::Face face2 = createFace(fInd[i][2]+1, fInd[i][3] + 1, fInd[i][0] + 1, mesh);
-                    updateBBox(&bbox, face2);
-                    mesh->faces.push_back(face2);
-
-                }
-                else{
-                    std::cout<<"A face is assumed to have 3 or 4 indices. can not parse. index count:" << fInd[i].size() << std::endl;
-                }
-            }
-        }
-        else
-        {
-            stream << child->GetText() << std::endl;
-            DorkTracer::Face face;
-            while (!(stream >> face.v0_id).eof())
-            {
-                stream >> face.v1_id >> face.v2_id;
-                computeFaceProperties(face, mesh);
-                
-                // calculate bbox of the owner mesh here
-                bbox.minCorner.x = std::min(face.bbox.minCorner.x,  bbox.minCorner.x);
-                bbox.minCorner.y = std::min(face.bbox.minCorner.y,  bbox.minCorner.y);
-                bbox.minCorner.z = std::min(face.bbox.minCorner.z,  bbox.minCorner.z);
-
-                bbox.maxCorner.x = std::max(face.bbox.maxCorner.x, bbox.maxCorner.x);
-                bbox.maxCorner.y = std::max(face.bbox.maxCorner.y, bbox.maxCorner.y);
-                bbox.maxCorner.z = std::max(face.bbox.maxCorner.z, bbox.maxCorner.z);
-
-                mesh->faces.push_back(face);
-            }
-        }
-        stream.clear();
-
-        mesh->bbox = bbox;
-        mesh->ConstructBVH();
-
-        meshes.push_back(mesh);
-        // mesh.faces.clear();
-        element = element->NextSiblingElement("Mesh");
-    }
-    stream.clear();
+    parseMeshes(root, "Mesh");
+    parseMeshes(root, "LightMesh");
 
 
     // Parse MeshInstances
@@ -966,7 +550,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     //Get Triangles, they can be represented with Mesh structure as well.
     element = root->FirstChildElement("Objects");
     element = element->FirstChildElement("Triangle");
-    
+
     while (element)
     {
         DorkTracer::Mesh* mesh = new DorkTracer::Mesh(this->vertex_data, this->texCoords);
@@ -1089,6 +673,7 @@ void DorkTracer::Scene::computeFaceProperties(DorkTracer::Face& face, Mesh* mesh
     computeFaceCenter(face, mesh);
     computeFaceNormal(face, mesh);
     computeFaceBoundingBox(face, mesh);
+    computeFaceArea(face, mesh);
 }
 void DorkTracer::Scene::computeFaceCenter(DorkTracer::Face& face, Mesh* mesh)
 {
@@ -1097,6 +682,23 @@ void DorkTracer::Scene::computeFaceCenter(DorkTracer::Face& face, Mesh* mesh)
     Vec3f& c = mesh->GetVertex(face.v2_id);
 
     face.center = (a+b+c) /3.0f;
+}
+void DorkTracer::Scene::computeFaceArea(DorkTracer::Face& face, Mesh* mesh)
+{
+    Vec3f& a = mesh->GetVertex(face.v0_id);
+    Vec3f& b = mesh->GetVertex(face.v1_id);
+    Vec3f& c = mesh->GetVertex(face.v2_id);
+
+    // Heron formula for area of triangle with length of all edges known.
+    double e1 = len(a-b);
+    double e2 = len(a-c);
+    double e3 = len(b-c);
+    double s = (e1+e2+e3)/2.0f;
+    double area = std::sqrt(s * (s-e1) * (s-e2) * (s-e3));
+
+    face.area = area;
+    mesh->surfaceArea += area;
+    // std::cout <<"a: " << area << " ";
 }
 
 void DorkTracer::Scene::SetupTextures(DorkTracer::Shape* shape, std::string& texIds)
@@ -1300,6 +902,8 @@ DorkTracer::Face DorkTracer::Scene::createFace(int v0idx, int v1idx, int v2idx, 
     face.v1_id = v1idx;
     face.v2_id = v2idx;
     computeFaceProperties(face, mesh);
+    std::cout << " total area of mesh: " << mesh->surfaceArea << std::endl;
+
     return face;
 }
 void Scene::updateBBox(BoundingBox* bbox, Face& face)
@@ -1380,8 +984,601 @@ void DorkTracer::Scene::parseBRDFs(tinyxml2::XMLNode* root)
             stream >> exponent;
 
             // Create and store the BRDF in scene.
+            this->brdfs.push_back(new BrdfModifiedBlinnPhong(exponent, normalized, id));
+
+            element = element->NextSiblingElement("ModifiedBlinnPhong");
+        }
+
+        element = root->FirstChildElement("BRDFs");
+        element = element->FirstChildElement("OriginalBlinnPhong");
+        while(element)
+        {
+            int id = -1;
+            stream << element->Attribute("id") << std::endl;
+            stream >> id;
+
+            float exponent = 0.0f;
+            stream << element->FirstChildElement("Exponent")->GetText() << std::endl;
+            stream >> exponent;
+
+            // Create and store the BRDF in scene.
+            this->brdfs.push_back(new BrdfBlinnPhong(exponent, false, id));
+
+            element = element->NextSiblingElement("OriginalBlinnPhong");
+        }
+
+        element = root->FirstChildElement("BRDFs");
+        element = element->FirstChildElement("OriginalPhong");
+        while(element)
+        {
+            int id = -1;
+            stream << element->Attribute("id") << std::endl;
+            stream >> id;
             
+            float exponent = 0.0f;
+            stream << element->FirstChildElement("Exponent")->GetText() << std::endl;
+            stream >> exponent;
+
+            // Create and store the BRDF in scene.
+            this->brdfs.push_back(new BrdfPhong(exponent, false, id));
+
+            element = element->NextSiblingElement("OriginalPhong");
+        }
+
+        element = root->FirstChildElement("BRDFs");
+        element = element->FirstChildElement("ModifiedPhong");
+        while(element)
+        {
+            int id = -1;
+            stream << element->Attribute("id") << std::endl;
+            stream >> id;
+
+            bool normalized = false;
+            if(element->Attribute("normalized", "true")){
+                normalized = true;
+            }
+
+            float exponent = 0.0f;
+            stream << element->FirstChildElement("Exponent")->GetText() << std::endl;
+            stream >> exponent;
+
+            // Create and store the BRDF in scene.
+            this->brdfs.push_back(new BrdfModifiedPhong(exponent, normalized, id));
+
+            element = element->NextSiblingElement("ModifiedPhong");
+        } 
+        
+        element = root->FirstChildElement("BRDFs");
+        element = element->FirstChildElement("TorranceSparrow");
+        while(element)
+        {
+            int id = -1;
+            stream << element->Attribute("id") << std::endl;
+            stream >> id;
+
+            bool kdfresnel = false;
+            if(element->Attribute("kdfresnel", "true")){
+                kdfresnel = true;
+            }
+
+            float exponent = 0.0f;
+            stream << element->FirstChildElement("Exponent")->GetText() << std::endl;
+            stream >> exponent;
+
+            // Create and store the BRDF in scene.
+            this->brdfs.push_back(new BrdfTorranceSparrow(exponent, kdfresnel, id));
+
+            element = element->NextSiblingElement("TorranceSparrow");
         }
     }
 }
+
+void DorkTracer::Scene::parseLights(tinyxml2::XMLNode* root)
+{
+    auto lights = root->FirstChildElement("Lights");
+    if(lights == NULL) return;
+
+    std::stringstream stream;
+
+    auto child = lights->FirstChildElement("AmbientLight");
+    if(child){
+        stream << child->GetText() << std::endl;
+        stream >> ambient_light.x >> ambient_light.y >> ambient_light.z;
+    }
+    else{
+        ambient_light = {0,0,0};
+    }
     
+    auto light = lights->FirstChildElement("PointLight");
+    PointLight point_light;
+    while (light)
+    {
+        child = light->FirstChildElement("Position");
+        stream << child->GetText() << std::endl;
+        child = light->FirstChildElement("Intensity");
+        stream << child->GetText() << std::endl;
+
+        stream >> point_light.position.x >> point_light.position.y >> point_light.position.z;
+        stream >> point_light.intensity.x >> point_light.intensity.y >> point_light.intensity.z;
+
+        point_lights.push_back(point_light);
+        light = light->NextSiblingElement("PointLight");
+    }
+
+    light = lights->FirstChildElement("AreaLight");
+    while (light)
+    {
+        Vec3f pos,normal, radiance;
+        float size;
+        int id;
+        
+        stream << light->Attribute("id") << std::endl;
+        stream >> id;
+        
+        child = light->FirstChildElement("Position");
+        stream << child->GetText() << std::endl;
+        stream >> pos.x >> pos.y >> pos.z;
+
+        child = light->FirstChildElement("Normal");
+        stream << child->GetText() << std::endl;
+        stream >> normal.x >> normal.y >> normal.z;
+        
+        child = light->FirstChildElement("Radiance");
+        stream << child->GetText() << std::endl;
+        stream >> radiance.x >> radiance.y >> radiance.z;
+
+        child = light->FirstChildElement("Size");
+        stream << child->GetText() << std::endl;
+        stream >> size;
+
+        areaLights.push_back(new AreaLight(id, pos, normal, radiance, size));
+
+        light = light->NextSiblingElement("AreaLight");
+    }
+
+    light = lights->FirstChildElement("DirectionalLight");
+    while (light)
+    {
+        Vec3f radiance, dir;
+        int id;
+        
+        stream << light->Attribute("id") << std::endl;
+        stream >> id;
+        
+
+        child = light->FirstChildElement("Direction");
+        stream << child->GetText() << std::endl;
+        stream >> dir.x >> dir.y >> dir.z;
+        
+        child = light->FirstChildElement("Radiance");
+        stream << child->GetText() << std::endl;
+        stream >> radiance.x >> radiance.y >> radiance.z;
+
+        directionalLights.push_back(new DirectionalLight(id, dir, radiance));
+
+        light = light->NextSiblingElement("DirectionalLight");
+    }
+
+    light = lights->FirstChildElement("SpotLight");
+    while (light)
+    {
+        Vec3f pos, dir, intensity;
+        int id;
+        float coverageAngle, falloffAngle;
+        
+        stream << light->Attribute("id") << std::endl;
+        stream >> id;
+        
+        child = light->FirstChildElement("Position");
+        stream << child->GetText() << std::endl;
+        stream >> pos.x >> pos.y >> pos.z;
+
+        child = light->FirstChildElement("Direction");
+        stream << child->GetText() << std::endl;
+        stream >> dir.x >> dir.y >> dir.z;
+        
+        child = light->FirstChildElement("Intensity");
+        stream << child->GetText() << std::endl;
+        stream >> intensity.x >> intensity.y >> intensity.z;
+
+        child = light->FirstChildElement("CoverageAngle");
+        stream << child->GetText() << std::endl;
+        stream >> coverageAngle;
+
+        child = light->FirstChildElement("FalloffAngle");
+        stream << child->GetText() << std::endl;
+        stream >> falloffAngle;
+
+        spotLights.push_back(new SpotLight(id, pos, dir, intensity, coverageAngle, falloffAngle));
+        light = light->NextSiblingElement("SpotLight");
+    }
+}
+
+void DorkTracer::Scene::parseMaterials(tinyxml2::XMLNode* root)
+{
+    // Get Materials
+    tinyxml2::XMLElement* element = root->FirstChildElement("Materials");
+
+    element = element->FirstChildElement("Material");
+    DorkTracer::Material material;
+    std::stringstream stream;
+
+    while (element)
+    {
+        int matId = -1;
+        stream << element->Attribute("id") << std::endl;
+        stream >> material.id;
+
+        if(element->Attribute("BRDF")){
+            int brdfID = -1;
+            stream << element->Attribute("BRDF") << std::endl;
+            stream >> brdfID;
+            
+            // find & assign the correct BRDF. Assumes BRDF parsing is already DONE.
+            BRDF* brdf = nullptr;
+            for(int i = 0; i < brdfs.size(); i++){
+                if(brdfs[i]->id == brdfID){
+                    brdf = brdfs[i];
+                    break;
+                }
+            }
+            material.brdf = brdf;
+        }
+
+        if(element->Attribute("type", "mirror"))
+        {
+            material.type = DorkTracer::Material::Mirror;
+        }
+        else if(element->Attribute("type", "dielectric")){
+            material.type = DorkTracer::Material::Dielectric;
+        }
+        else if(element->Attribute("type", "conductor")){
+            material.type = DorkTracer::Material::Conductor;
+        }
+        else{
+            material.type = DorkTracer::Material::Default;
+        }
+
+        bool degamma = false;
+        float gamma = 2.2f;
+        if(element->Attribute("degamma", "true"))
+        {
+            degamma = true;
+        }
+
+        auto child = element->FirstChildElement("AmbientReflectance");
+        if(child != NULL)
+        {
+            stream << child->GetText() << std::endl;
+            stream >> material.ambient.x >> material.ambient.y >> material.ambient.z;
+            if(degamma)
+            {
+                material.ambient.x = std::pow(material.ambient.x, gamma);
+                material.ambient.y = std::pow(material.ambient.y, gamma);
+                material.ambient.z = std::pow(material.ambient.z, gamma);
+            }
+        }
+
+        child = element->FirstChildElement("DiffuseReflectance");
+        if( child != NULL){
+            stream << child->GetText() << std::endl;
+            stream >> material.diffuse.x >> material.diffuse.y >> material.diffuse.z;
+    
+            if(degamma)
+            {
+                material.diffuse.x = std::pow(material.diffuse.x, gamma);
+                material.diffuse.y = std::pow(material.diffuse.y, gamma);
+                material.diffuse.z = std::pow(material.diffuse.z, gamma);
+                std::cout <<"diffuse after degamma: " << material.diffuse.x << std::endl;
+            }
+        }
+
+        child = element->FirstChildElement("SpecularReflectance");
+        if( child != NULL){
+            stream << child->GetText() << std::endl;
+            stream >> material.specular.x >> material.specular.y >> material.specular.z;
+      
+            if(degamma)
+            {
+                material.specular.x = std::pow(material.specular.x, gamma);
+                material.specular.y = std::pow(material.specular.y, gamma);
+                material.specular.z = std::pow(material.specular.z, gamma);
+            }
+        }
+
+        child = element->FirstChildElement("MirrorReflectance");
+        if( child != NULL){
+            stream << child->GetText() << std::endl;
+            stream >> material.mirror.x >> material.mirror.y >> material.mirror.z;
+     
+            if(degamma)
+            {
+                material.mirror.x = std::pow(material.mirror.x, gamma);
+                material.mirror.y = std::pow(material.mirror.y, gamma);
+                material.mirror.z = std::pow(material.mirror.z, gamma);
+            }
+        }
+        else
+        {
+            material.mirror.x = material.mirror.y = material.mirror.z = 0.0f;
+        }
+
+        child = element->FirstChildElement("RefractionIndex");
+        if( child != NULL){
+            stream << child->GetText() << std::endl;
+            stream >> material.refractiveIndex;
+            // if(degamma)
+            // {
+            //     material.refractiveIndex= std::pow(material.refractiveIndex, gamma);
+            // }
+        }else
+        {
+            material.refractiveIndex = 1.0f;
+        }
+
+        child = element->FirstChildElement("AbsorptionCoefficient");
+        if( child != NULL){
+            stream << child->GetText() << std::endl;
+            stream >> material.absorptionCoefficient.x >>  material.absorptionCoefficient.y >> material.absorptionCoefficient.z;
+            // if(degamma)
+            // {
+            //     material.absorptionCoefficient.x = std::pow(material.absorptionCoefficient.x, gamma);
+            //     material.absorptionCoefficient.y = std::pow(material.absorptionCoefficient.y, gamma);
+            //     material.absorptionCoefficient.z = std::pow(material.absorptionCoefficient.z, gamma);
+            // }
+        }else
+        {
+            material.absorptionCoefficient = Vec3f{0,0,0};
+        }
+
+        child = element->FirstChildElement("AbsorptionIndex");
+        if( child != NULL){
+            stream << child->GetText() << std::endl;
+            stream >> material.conductorAbsorptionIndex;
+        }else
+        {
+            material.conductorAbsorptionIndex = 0.0f;
+        }
+        
+        child = element->FirstChildElement("PhongExponent");
+        if( child != NULL)
+        {
+            stream << child->GetText() << std::endl;
+            stream >> material.phong_exponent;
+        }
+        else{
+            material.phong_exponent = 1.0f;
+        }
+
+        child = element->FirstChildElement("Roughness");
+        if( child != NULL)
+        {
+            stream << child->GetText() << std::endl;
+            stream >> material.roughness;
+        }
+        else{
+            material.roughness = 0.0f;
+        }
+
+        materials.push_back(material);
+        element = element->NextSiblingElement("Material");
+    }
+}
+
+void DorkTracer::Scene::parseMeshes(tinyxml2::XMLNode* root, std::string elemName)
+{ 
+    auto element = root->FirstChildElement("Objects");
+    element = element->FirstChildElement(elemName.c_str());
+    std::stringstream stream;
+
+    while (element)
+    {
+        auto child = element->FirstChildElement("Faces");
+        bool hasPlyData = child->Attribute("plyFile") != NULL;
+
+        DorkTracer::Mesh* mesh;
+
+        if(hasPlyData)
+        {
+            std::vector<Vec3f> meshVertices;
+            std::vector<Vec2f> meshUV;
+            if(elemName == "Mesh")
+            {
+                mesh = new DorkTracer::Mesh(meshVertices, meshUV);
+            }
+            else if(elemName == "LightMesh")
+            {
+                Vec3f radiance{0,0,0};
+                child = element->FirstChildElement("Radiance");
+                if(child){
+                    stream << child->GetText() << std::endl;
+                    stream >> radiance.x >> radiance.y >> radiance.z;
+                }
+                mesh = (Mesh*)new DorkTracer::MeshLight(meshVertices, meshUV, radiance);
+            }
+        }
+        else{
+            if(elemName == "Mesh")
+            {
+                mesh = new DorkTracer::Mesh(this->vertex_data, this->texCoords);
+            }
+            else if(elemName == "LightMesh")
+            { 
+                Vec3f radiance{0,0,0};
+                child = element->FirstChildElement("Radiance");
+                if(child){
+                    stream << child->GetText() << std::endl;
+                    stream >> radiance.x >> radiance.y >> radiance.z;
+                }
+                mesh = (Mesh*)new DorkTracer::MeshLight(this->vertex_data, this->texCoords, radiance);
+            }
+        }
+        mesh->isInstance = false;
+
+        stream << element->Attribute("id") << std::endl;
+        stream >> mesh->id;
+
+        // Setup textures
+        child = element->FirstChildElement("Textures");
+        if(child){
+            std::string texturesInp;
+            texturesInp = child->GetText();
+            texturesInp += " ";
+            SetupTextures(mesh, texturesInp);
+        }
+        // Compute Model, invModel and invTransModel matrices from given transformations.
+        child = element->FirstChildElement("Transformations");
+
+        mesh->transform.MakeIdentity();
+        mesh->inverseTransform.MakeIdentity();
+        mesh->inverseTransposeTransform.MakeIdentity();
+
+        if(child != nullptr)
+        {
+            std::string input = child->GetText();
+            computeTransform(mesh, input);
+        }
+
+        // Common ops to both cases.
+        child = element->FirstChildElement("Material");
+        stream << child->GetText() << std::endl;
+        int matId = 0;
+        stream >> matId;
+        mesh->SetMaterial(matId);
+
+        // parse motion blur
+        // <MotionBlur>0 0 4</MotionBlur>
+        child = element->FirstChildElement("MotionBlur");
+        if(child != nullptr)
+        {
+            stream << child->GetText() << std::endl;
+            stream >> mesh->motionBlurVector.x >> mesh->motionBlurVector.y >> mesh->motionBlurVector.z;
+
+            mesh->hasMotionBlur = true;
+            // enable motior blur globally even if only one object is using it.
+            this->isMotionBlurEnabled = true; 
+        }
+        else{
+            mesh->hasMotionBlur = false;
+            mesh->motionBlurVector = Vec3f(0.0f,0.0f,0.0f);
+        }
+
+        child = element->FirstChildElement("Faces");
+
+        int vertexOffset = 0;
+        if(child->Attribute("vertexOffset") != NULL){
+            stream << child->Attribute("vertexOffset") << std::endl;
+            stream >> vertexOffset;
+        }
+        int textureOffset = 0;
+        if(child->Attribute("textureOffset") != NULL){
+            stream << child->Attribute("textureOffset") << std::endl;
+            stream >> textureOffset;
+        }
+        mesh->SetAccessOffsets(vertexOffset, textureOffset);
+
+        BoundingBox bbox;
+        bbox.maxCorner.x = bbox.maxCorner.y = bbox.maxCorner.z = std::numeric_limits<float>::min();
+        bbox.minCorner.x = bbox.minCorner.y = bbox.minCorner.z = std::numeric_limits<float>::max();
+        
+        if(hasPlyData)
+        {
+            // Face data is given as plyFile
+            std::string filename;
+            stream << child->Attribute("plyFile");
+            stream >> filename;
+            // std::cout <<"Ply Filename:"<<filename<<std::endl;
+            // Construct the data object by reading from file
+            happly::PLYData plyIn(child->Attribute("plyFile"));
+
+            std::vector<std::array<double, 3>> vPos = plyIn.getVertexPositions();
+            for(int i = 0; i < vPos.size(); i++){
+                Vec3f vert { vPos[i][0], vPos[i][1], vPos[i][2]};
+                mesh->AddVertex(vert);
+            }
+            vPos.clear();
+
+            // for(auto str : plyIn.getElementNames()){
+            //     std::cout << str << std::endl;
+            // }
+            std::vector<std::vector<int>> fInd = plyIn.getFaceIndices<int>();
+            // std::cout<<"has: "<<  fInd.size() << " Triangles."<< std::endl;
+            for(int i = 0; i < fInd.size(); i++)
+            {
+                if(fInd[i].size() == 3){
+                    // ply format is 0 base indexed, whereas rest of our project uses 1-based indexing, so add that offset.
+                    DorkTracer::Face face = createFace(fInd[i][0]+1, fInd[i][1] + 1, fInd[i][2] + 1, mesh);
+
+                    // calculate bbox of the owner mesh here
+                    updateBBox(&bbox, face);
+                    mesh->faces.push_back(face);
+                }
+                else if(fInd[i].size() == 4)
+                {
+                    // ply format is 0 base indexed, whereas rest of our project uses 1-based indexing, so add that offset.
+                    DorkTracer::Face face1 = createFace(fInd[i][0]+1, fInd[i][1] + 1, fInd[i][2] + 1, mesh);
+                    updateBBox(&bbox, face1);
+                    mesh->faces.push_back(face1);
+
+                    DorkTracer::Face face2 = createFace(fInd[i][2]+1, fInd[i][3] + 1, fInd[i][0] + 1, mesh);
+                    updateBBox(&bbox, face2);
+                    mesh->faces.push_back(face2);
+
+                }
+                else{
+                    std::cout<<"A face is assumed to have 3 or 4 indices. can not parse. index count:" << fInd[i].size() << std::endl;
+                }
+            }
+        }
+        else
+        {
+            stream << child->GetText() << std::endl;
+            DorkTracer::Face face;
+            while (!(stream >> face.v0_id).eof())
+            {
+                stream >> face.v1_id >> face.v2_id;
+                computeFaceProperties(face, mesh);
+                
+                // calculate bbox of the owner mesh here
+                bbox.minCorner.x = std::min(face.bbox.minCorner.x,  bbox.minCorner.x);
+                bbox.minCorner.y = std::min(face.bbox.minCorner.y,  bbox.minCorner.y);
+                bbox.minCorner.z = std::min(face.bbox.minCorner.z,  bbox.minCorner.z);
+
+                bbox.maxCorner.x = std::max(face.bbox.maxCorner.x, bbox.maxCorner.x);
+                bbox.maxCorner.y = std::max(face.bbox.maxCorner.y, bbox.maxCorner.y);
+                bbox.maxCorner.z = std::max(face.bbox.maxCorner.z, bbox.maxCorner.z);
+
+                mesh->faces.push_back(face);
+            }
+        }
+        stream.clear();
+
+        mesh->bbox = bbox;
+        mesh->ConstructBVH();
+
+        if(elemName == "Mesh")
+        {
+            meshes.push_back(mesh);
+        }
+        else if(elemName == "LightMesh")
+        {
+            MeshLight* meshLight = (MeshLight*) mesh;
+            std::cout<<"meshlight has: "  << meshLight->faces.size() <<" many faces."<<std::endl;
+            meshLight->setupFaceSelectionDistro(meshLight->faces.size());
+
+            meshLights.push_back(meshLight);
+            meshes.push_back(mesh);
+
+            // mark its material as emissive/light?
+            Material& mat = this->materials[mesh->GetMaterial()-1];
+            mat.type = DorkTracer::Material::Emissive;
+            mat.radiance = meshLight->radiance;
+            
+            std::cout<<"parsed a light mesh with radiance:" << mat.radiance.x << std::endl;
+        }
+        // mesh.faces.clear();
+        // std::cout << " total area of mesh: " << mesh->surfaceArea << std::endl;
+        element = element->NextSiblingElement(elemName.c_str());
+    }
+    stream.clear();
+    }

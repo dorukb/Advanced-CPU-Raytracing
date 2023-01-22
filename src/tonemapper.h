@@ -13,7 +13,7 @@ namespace DorkTracer
         float burnPerct;
         float saturation;
         float gamma;
-        float delta = 0.001f;
+        float delta = 0.01f;
 
         Tonemapper(std::string opType, float keyVal, float burnPerct, float saturation, float gamma)
         {
@@ -39,6 +39,7 @@ namespace DorkTracer
                 double b = sortedPixelLuminances[3 * i + 2] = hdrSrc[3 * i + 2];
 
                 double luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          
                 // Eqn 1, find the average key in the scene
                 logLuminancesSum += std::log(delta + luminance);
             }

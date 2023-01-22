@@ -48,7 +48,7 @@ namespace DorkTracer
 
         Vec3f GetDiffuseReflectanceCoeff(Ray& ray, Shape* shape, Material& mat);
         Vec3f GetSpecularReflectanceCoeff(Ray& ray, Shape* shape, Material& mat);
-
+        Vec3f ComputeGlobalIllumination(Ray& originalRay,Material& orgMat, Vec3f& w_o, int recDepth);
         Vec3f Shade(Ray& ray, Material& mat, Vec3f& w_i, Vec3f& w_o, Vec3f& receivedIrradiance);
 
         float GetRandom();
