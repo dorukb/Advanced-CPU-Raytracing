@@ -151,6 +151,13 @@ int main(int argc, char* argv[])
             hdrImage = new float [width*height*3];
         }
 
+        // Configure the renderer.
+        if(cam.IsPathTracingEnabled())
+        {
+            std::cout << "Path tracing is enabled for:" << cam.imageName << std::endl;
+            renderer.EnablePathTracing(cam.GetRendererParams());
+        }
+
         std::cout<<"Resolution: "<<width <<"x"<<height;
         std::cout<<", Running on: "<<THREAD_COUNT <<" threads." << std::endl;
 
@@ -160,6 +167,8 @@ int main(int argc, char* argv[])
         std::vector<RenderThreadArgs> args;
         args.resize(THREAD_COUNT);
 
+        
+        
         for(int t = 0; t < THREAD_COUNT; t++)
         {
             args[t].cam = &cam;

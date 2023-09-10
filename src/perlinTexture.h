@@ -49,6 +49,11 @@ namespace DorkTracer
             // TODO: Fix this inheritance issue, perlin cant support this.
             return Vec3i(180,30,180);
         }
+        virtual int GetSampleGreyscale(int i, int j)
+        {
+            // TODO: Fix this inheritance issue, perlin cant support this.
+            return 0.0f;
+        }
         virtual float GetSampleFromWorldPos(float x, float y, float z)
         {
             x *= scale;

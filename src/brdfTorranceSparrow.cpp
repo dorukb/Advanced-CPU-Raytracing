@@ -38,6 +38,8 @@ namespace DorkTracer
         return kdTerm + ksTerm;
     }
 
+
+    // The "D" term, simulates orientation distribution of the micro-facet surface.
     double BrdfTorranceSparrow::probabilityOfAngle(double cosAlpha, double exponent)
     {
         return (exponent+2) * std::pow(cosAlpha, exponent) / (2*M_PI);

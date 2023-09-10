@@ -28,6 +28,7 @@ namespace DorkTracer
 
         float motionBlurTime;
         float lightSampleX, lightSampleY;
+        Vec3f throughput{1.0f, 1.0f, 1.0f};
     };
 }
 

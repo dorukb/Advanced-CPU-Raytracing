@@ -20,6 +20,7 @@
 #include "brdfTorranceSparrow.h"
 #include "brdf.h"
 
+
 using namespace DorkTracer;
 
 void DorkTracer::Scene::loadFromXml(const std::string &filepath)
@@ -69,100 +70,7 @@ void DorkTracer::Scene::loadFromXml(const std::string &filepath)
     }
 
     //Get Cameras
-    element = root->FirstChildElement("Cameras");
-    element = element->FirstChildElement("Camera");
-    DorkTracer::Camera camera;
-
-    while (element)
-    {
-        bool isLookAt = element->Attribute("type", "lookAt") != NULL;
-        Vec3f camPos, upDir;
-        float nearDist, width, height;
-        std::string imageName;
-
-        auto child = element->FirstChildElement("Position");
-        stream << child->GetText() << std::endl;
-        stream >> camPos.x >> camPos.y >> camPos.z;
-
-        child = element->FirstChildElement("Up");
-        stream << child->GetText() << std::endl;
-        stream >> upDir.x >> upDir.y >> upDir.z;
-
-        child = element->FirstChildElement("NearDistance");
-        stream << child->GetText() << std::endl;
-        stream >> nearDist;
-
-        child = element->FirstChildElement("ImageResolution");
-        stream << child->GetText() << std::endl;
-        stream >> width >> height;
-
-        child = element->FirstChildElement("ImageName");
-        stream << child->GetText() << std::endl;
-        stream >> imageName;
-
-        if(isLookAt){
-
-            Vec3f gazePoint;
-            float fovY;
-
-            child = element->FirstChildElement("GazePoint");
-            if(child == NULL){
-                child = element->FirstChildElement("Gaze");
-            }
-            stream << child->GetText() << std::endl;
-            stream >> gazePoint.x >> gazePoint.y >> gazePoint.z;
-
-            child = element->FirstChildElement("FovY");
-            stream << child->GetText() << std::endl;
-            stream >> fovY;
-            camera.SetupLookAt(camPos, gazePoint, upDir, nearDist, fovY, width, height, imageName);
-        }
-        else{
-            Vec3f gazeDir;
-            Vec4f nearPlane;
-
-            child = element->FirstChildElement("Gaze");
-            stream << child->GetText() << std::endl;
-            stream >> gazeDir.x >> gazeDir.y >> gazeDir.z;
-
-            child = element->FirstChildElement("NearPlane");
-            stream << child->GetText() << std::endl;
-            stream >> nearPlane.x >> nearPlane.y >> nearPlane.z >> nearPlane.w;
-            camera.SetupDefault(camPos, gazeDir, upDir, nearPlane, nearDist, width, height, imageName);
-        }
-        
-        int numSamples = 1;
-        child = element->FirstChildElement("NumSamples");
-        if(child != nullptr){
-            stream << child->GetText() << std::endl;
-            stream >> numSamples;
-        }
-        camera.samplesPerPixel = numSamples;
-        std::cout << "Num samples: " <<camera.samplesPerPixel << std::endl;
-
-
-        float focusDistance = 0.0f;
-        child = element->FirstChildElement("FocusDistance");
-        if(child != nullptr){
-            stream << child->GetText() << std::endl;
-            stream >> focusDistance;
-        }
-        camera.focusDistance = focusDistance;
-
-
-        float apertureSize = 0.0f;
-        child = element->FirstChildElement("ApertureSize");
-        if(child != nullptr){
-            stream << child->GetText() << std::endl;
-            stream >> apertureSize;
-        }
-        camera.apertureSize = apertureSize;
-
-        parseTonemapper(element, &camera);
-
-        cameras.push_back(camera);
-        element = element->NextSiblingElement("Camera");
-    }
+    parseCameras(root);
 
     //Get Lights
     parseLights(root);
@@ -1090,18 +998,22 @@ void DorkTracer::Scene::parseLights(tinyxml2::XMLNode* root)
     }
     
     auto light = lights->FirstChildElement("PointLight");
-    PointLight point_light;
     while (light)
     {
+        int id;
+        stream << light->Attribute("id") << std::endl;
+        stream >> id;
+
         child = light->FirstChildElement("Position");
         stream << child->GetText() << std::endl;
         child = light->FirstChildElement("Intensity");
         stream << child->GetText() << std::endl;
 
-        stream >> point_light.position.x >> point_light.position.y >> point_light.position.z;
-        stream >> point_light.intensity.x >> point_light.intensity.y >> point_light.intensity.z;
+        Vec3f pos, intensity;
+        stream >> pos.x >> pos.y >> pos.z;
+        stream >> intensity.x >> intensity.y >> intensity.z;
 
-        point_lights.push_back(point_light);
+        point_lights.push_back(PointLight(id , pos, intensity));
         light = light->NextSiblingElement("PointLight");
     }
 
@@ -1581,4 +1493,144 @@ void DorkTracer::Scene::parseMeshes(tinyxml2::XMLNode* root, std::string elemNam
         element = element->NextSiblingElement(elemName.c_str());
     }
     stream.clear();
+}
+
+void DorkTracer::Scene::parseCameras(tinyxml2::XMLNode* root)
+{
+    auto element = root->FirstChildElement("Cameras");
+    element = element->FirstChildElement("Camera");
+
+    std::stringstream stream;
+    DorkTracer::Camera camera;
+    while (element)
+    {
+        bool isLookAt = element->Attribute("type", "lookAt") != NULL;
+        Vec3f camPos, upDir;
+        float nearDist, width, height;
+        std::string imageName;
+
+        auto child = element->FirstChildElement("Position");
+        stream << child->GetText() << std::endl;
+        stream >> camPos.x >> camPos.y >> camPos.z;
+
+        child = element->FirstChildElement("Up");
+        stream << child->GetText() << std::endl;
+        stream >> upDir.x >> upDir.y >> upDir.z;
+
+        child = element->FirstChildElement("NearDistance");
+        stream << child->GetText() << std::endl;
+        stream >> nearDist;
+
+        child = element->FirstChildElement("ImageResolution");
+        stream << child->GetText() << std::endl;
+        stream >> width >> height;
+
+        child = element->FirstChildElement("ImageName");
+        stream << child->GetText() << std::endl;
+        stream >> imageName;
+
+        if(isLookAt){
+
+            Vec3f gazePoint;
+            float fovY;
+
+            child = element->FirstChildElement("GazePoint");
+            if(child == NULL){
+                child = element->FirstChildElement("Gaze");
+            }
+            stream << child->GetText() << std::endl;
+            stream >> gazePoint.x >> gazePoint.y >> gazePoint.z;
+
+            child = element->FirstChildElement("FovY");
+            stream << child->GetText() << std::endl;
+            stream >> fovY;
+            camera.SetupLookAt(camPos, gazePoint, upDir, nearDist, fovY, width, height, imageName);
+        }
+        else{
+            Vec3f gazeDir;
+            Vec4f nearPlane;
+
+            child = element->FirstChildElement("Gaze");
+            stream << child->GetText() << std::endl;
+            stream >> gazeDir.x >> gazeDir.y >> gazeDir.z;
+
+            child = element->FirstChildElement("NearPlane");
+            stream << child->GetText() << std::endl;
+            stream >> nearPlane.x >> nearPlane.y >> nearPlane.z >> nearPlane.w;
+            camera.SetupDefault(camPos, gazeDir, upDir, nearPlane, nearDist, width, height, imageName);
+        }
+        
+        int numSamples = 1;
+        child = element->FirstChildElement("NumSamples");
+        if(child != nullptr){
+            stream << child->GetText() << std::endl;
+            stream >> numSamples;
+        }
+        camera.samplesPerPixel = numSamples;
+        std::cout << "Num samples: " <<camera.samplesPerPixel << std::endl;
+
+
+        float focusDistance = 0.0f;
+        child = element->FirstChildElement("FocusDistance");
+        if(child != nullptr){
+            stream << child->GetText() << std::endl;
+            stream >> focusDistance;
+        }
+        camera.focusDistance = focusDistance;
+
+        float apertureSize = 0.0f;
+        child = element->FirstChildElement("ApertureSize");
+        if(child != nullptr){
+            stream << child->GetText() << std::endl;
+            stream >> apertureSize;
+        }
+        camera.apertureSize = apertureSize;
+
+        // Parse Render parameters, mainly for Path Tracing.
+        child = element->FirstChildElement("Renderer");
+        if(child != nullptr)
+        {
+            std::string rendererType;
+            stream << child->GetText() << std::endl;
+            stream >> rendererType;
+            if(rendererType == "PathTracing")
+            {
+                child = element->FirstChildElement("RendererParams");
+                bool importanceSampling, russianRoulette,nextEventEstimation;
+                importanceSampling = russianRoulette = nextEventEstimation = false;
+
+                if(child != nullptr)
+                {
+                    stream << child->GetText() << std::endl;
+                    std::string param;
+                    while(stream >> param) {
+                        std::cout << param << std::endl;
+                        if(param == "NextEventEstimation"){
+                            nextEventEstimation= true;
+                        }
+                        else if(param == "RussianRoulette"){
+                            russianRoulette = true;
+                        }
+                        else if(param == "ImportanceSampling"){
+                            importanceSampling = true;
+                        }
+                    }
+                }
+                stream.clear();
+                
+                RendererParams rendererParams;
+                rendererParams.SetParams(true, importanceSampling, nextEventEstimation, russianRoulette);
+                camera.SetRendererParams(rendererParams);
+            }
+            else{
+                std::cout << "Unknown renderer type: " << rendererType << std::endl;
+            }
+        }
+
+
+        parseTonemapper(element, &camera);
+
+        cameras.push_back(camera);
+        element = element->NextSiblingElement("Camera");
     }
+}

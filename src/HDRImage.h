@@ -39,6 +39,7 @@ namespace DorkTracer
         }
 
 
+
     protected:
 
         void LoadImage(std::string filename) override

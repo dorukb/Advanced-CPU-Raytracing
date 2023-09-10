@@ -10,6 +10,9 @@
 #include "shape.hpp"
 #include "sphere.hpp"
 #include "tinyxml2.h"
+
+#include "light.h"
+#include "pointLight.h"
 #include "areaLight.h"
 #include "directionalLight.h"
 #include "spotLight.h"
@@ -22,16 +25,9 @@
 #include "imageTexture.h"
 #include "perlinTexture.h"
 #include "tonemapper.h"
-#
 
 namespace DorkTracer{
 
-
-    struct PointLight
-    {
-        Vec3f position;
-        Vec3f intensity;
-    };
 
     class Scene
     {
@@ -89,8 +85,7 @@ namespace DorkTracer{
         void parseMaterials(tinyxml2::XMLNode* root);
         void parseLights(tinyxml2::XMLNode* root);
         void parseMeshes(tinyxml2::XMLNode* root, std::string elemName);
-
-
+        void parseCameras(tinyxml2::XMLNode* root);
     };
 }
 

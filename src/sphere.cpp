@@ -94,17 +94,24 @@ bool DorkTracer::Sphere::Intersect(Ray& r)
 
             if(HasNormalMap())
             {
-                Vec3f sampledNormal = this->normalMap->GetRGBSample(u,v);
-                sampledNormal = sampledNormal / (127.5f) - Vec3f(1,1,1);
-                sampledNormal = makeUnit(sampledNormal);
+                // let's just use it for Displacement mapping.
+                
+                int height = this->normalMap->GetSampleGreyscale(u,v);
 
-                // convert normal map vector from canonical to local space.
+                int hmin, hmax;
+                normalMap->GetMinMaxValues(hmin, hmax);
+                
+                // Vec3f sampledNormal = this->normalMap->GetRGBSample(u,v);
+                // sampledNormal = sampledNormal / (127.5f) - Vec3f(1,1,1);
+                // sampledNormal = makeUnit(sampledNormal);
 
-                Vec3f tan,bitan;
-                GetTangentAndBitangentAroundPoint(p, radius, phi, theta, tan, bitan);
-                Vec3f normal = makeUnit(cross(bitan, tan));
+                // // convert normal map vector from canonical to local space.
 
-                r.hitInfo.normal = GetTransformedNormal(tan, bitan, normal, sampledNormal);
+                // Vec3f tan,bitan;
+                // GetTangentAndBitangentAroundPoint(p, radius, phi, theta, tan, bitan);
+                // Vec3f normal = makeUnit(cross(bitan, tan));
+
+                // r.hitInfo.normal = GetTransformedNormal(tan, bitan, normal, sampledNormal);
             }
             else if(HasBumpMap())
             {

@@ -13,6 +13,8 @@ namespace DorkTracer
         float normalizer;
         float sampleMultiplier;
 
+        int hmin, hmax;
+
         ImageTexture(int id, float normalizer, float sampleMultiplier, std::string& opMode, std::string& interpolationMode, Image* image)
         : Texture(id, opMode)
         {
@@ -23,6 +25,33 @@ namespace DorkTracer
             if(interpolationMode == "nearest"){
                 this-> interpolationMode = InterpolationMode::Nearest;
             }
+
+            if(this->type == Textures::Normal)
+            {
+                // actually displacement map.
+
+                hmin = 256;
+                hmax = -1;
+
+                for(int u = 0; u < image->width; u++)
+                {
+                    for(int v = 0; v < image->height; v++)
+                    {
+                        int h = image->GetSampleGreyscale(u,v);
+
+                        hmax = h > hmax ? h : hmax;
+                        hmin = h < hmin ? h : hmin;
+                    }
+                }
+                hmin /= normalizer;
+                hmax /= normalizer;
+                std::cout << "H_min: " << hmin << " H_max: " << hmax << std::endl;
+            }
+        }
+        virtual void GetMinMaxValues(int& min, int& max) override
+        {
+            min = hmin;
+            max = hmax;
         }
         Vec3f GetDirectSample(int i, int j)
         {
@@ -41,6 +70,16 @@ namespace DorkTracer
                 return img->GetSample(i, j);
             }
             else return interpolateBilinear(u, v);
+        }
+        int GetSampleGreyscale(int u, int v){
+            int i,j;
+        
+            i = (int) (u * img->width);
+            j = (int) (v * img->height);
+            
+            i = std::min(img->width-1, i);
+            j = std::min(img->height-1, j);
+            return img->GetSampleGreyscale(i,j) / this->normalizer;
         }
         float GetNormalizer(){
             return this->normalizer;

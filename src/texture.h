@@ -50,8 +50,12 @@ namespace DorkTracer
         virtual Vec3f GetRGBSample(float u, float v) = 0;
         virtual float GetSampleFromWorldPos(float x, float y, float z){
             return 0;
+        }   
+        virtual int GetSampleGreyscale(int i, int j) = 0;
+        virtual void GetMinMaxValues(int& min, int& max)
+        {
+            min = max = 0;
         }
-
         virtual float GetHeight() = 0;
         virtual float GetWidth() = 0;
         virtual float GetNormalizer() = 0;

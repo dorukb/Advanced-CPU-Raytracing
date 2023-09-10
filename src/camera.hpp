@@ -2,12 +2,13 @@
 #define __HW1__CAMERA__
 
 #include <string>
-
 #include "helperMath.h"
+#include "rendererParams.h"
 
 namespace DorkTracer
 {
     class Tonemapper;
+    class Raytracer;
 
     class Camera
     {
@@ -33,10 +34,16 @@ namespace DorkTracer
 
             void SetTonemapper(Tonemapper* tonemapper);
             void GetTonemappedImage(int width, int height, float* hdrSrc, unsigned char* ldrDest);
+
+            void SetRendererParams(RendererParams params);
+            bool IsPathTracingEnabled();
+            RendererParams& GetRendererParams();
+
         private:
             Vec3f m_w, m_middle, m_q, m_u;
             float m_left, m_right, m_bottom,m_top;
             Tonemapper* tonemapper;
+            RendererParams rendererParams;
 
             void CalculateImagePlaneParams();
             Vec3f GetOrthonormal(Vec3f& toBeTransformed, Vec3f& relative);

@@ -85,8 +85,20 @@ void Camera::SetTonemapper(Tonemapper* tonemapper)
     this->hasTonemapper = tonemapper != nullptr;
 }
 
-
 void Camera::GetTonemappedImage(int width, int height, float* hdrSrc, unsigned char* ldrDest)
 {
     this->tonemapper->Tonemap(width, height, hdrSrc, ldrDest);
+}
+
+void Camera::SetRendererParams(RendererParams params)
+{
+    this->rendererParams = params;
+}
+bool Camera::IsPathTracingEnabled()
+{
+    return this->rendererParams.pathTracingEnabled;
+}
+RendererParams& Camera::GetRendererParams()
+{
+    return this->rendererParams;
 }

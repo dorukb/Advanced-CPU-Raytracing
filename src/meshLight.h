@@ -38,11 +38,10 @@ namespace DorkTracer
 
             Vec3f q,p;
             q = b * (1-rand2) + c * rand2;
-
             pos = a * (1- std::sqrt(rand1)) + q * std::sqrt(rand1);
 
+            // Assign the "out" variables.
             pos = Matrix::ApplyTransformToPoint(this->transform,pos);
-
             normal = face.n;
             weight = selectionWeight;
         }

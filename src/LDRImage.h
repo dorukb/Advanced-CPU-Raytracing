@@ -29,6 +29,9 @@ namespace DorkTracer
             uint32_t imgIdx = i + j * width;
             return image[imgIdx];
         }
+        void* getData(){
+            return image;
+        }
     protected:
 
         unsigned char* image;   

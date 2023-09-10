@@ -1,16 +1,16 @@
 #ifndef __DORKTRACER_SPOTLIGHT__
 #define __DORKTRACER_SPOTLIGHT__
 
+#include "light.h"
 #include "helperMath.h"
 #define DEG2RAD (M_PI / 180.0f)
 
 namespace DorkTracer
 {
-    class SpotLight
+    class SpotLight : public Light
     {
 
     public:
-        int id;
         Vec3f pos;
         Vec3f dir;
         Vec3f intensity;
@@ -18,8 +18,8 @@ namespace DorkTracer
         float falloffAngle;
 
         SpotLight(int id, Vec3f pos, Vec3f dir, Vec3f intensity, float coverageAngle, float falloffAngle)
+        : Light(id)
         {
-            this->id = id;
             this->pos = pos;
             this->dir = makeUnit(dir);
             this->intensity = intensity;

@@ -7,17 +7,24 @@ using namespace DorkTracer;
 Raytracer::Raytracer(Scene& scene){
     this->scene = scene;
 
-    this->roughnessRandomGenerator = std::mt19937(rand());
-    // this->roughnessRandomDistro =  std::uniform_real_distribution<>(-0.5f, 0.5f);
-    this->roughnessRandomDistro =  std::uniform_real_distribution<>(0.0f, 1.0f);
+    this->randGen = std::mt19937(rand());
+    this->roughnessRandomDistro =  std::uniform_real_distribution<>(-0.5f, 0.5f);
+    this->normalizedDistro =  std::uniform_real_distribution<>(0.0f, 1.0f);
 
     this->dofLensSampleGenerator = std::mt19937(rand());
     this->dofLensSampleDistro = std::uniform_real_distribution<>(-1.0f, 1.0f);
 }
 
-float Raytracer::GetRandom()
+void Raytracer::EnablePathTracing(RendererParams params)
 {
-    return this->roughnessRandomDistro(this->roughnessRandomGenerator);
+    this->pathTracingEnabled = true;
+    this->rendererParams = params;
+}
+
+float Raytracer::GetNormalizedRandom()
+{
+    // Returns a random float in range [0,1].
+    return this->normalizedDistro(this->randGen);
 }
 float Raytracer::GetLensSample(){
     return this->dofLensSampleDistro(this->dofLensSampleGenerator);
@@ -57,7 +64,7 @@ Vec3f Raytracer::PerPixel(int coordX, int coordY, Camera& cam)
 
 Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
 {
-    if(recursionDepth == 0) return Vec3f(0,0,0);
+    // if(recursionDepth == 0) return Vec3f(0,0,0);
 
     ray.hitInfo.hitPoint = ray.origin + ray.dir * ray.hitInfo.minT;
     // Actually perform shading, depending on Material type.
@@ -81,126 +88,25 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
         return shape->replaceAll->GetRGBSample(ray.hitInfo.hitUV.x, ray.hitInfo.hitUV.y);
     }
 
-    if(!travellingInsideAnObject)
+    int hitLightMeshId = -1; // to prevent sampling the same object light twice if NextEventEstimation is also active.
+    if(rendererParams.pathTracingEnabled)
+    {
+        // send global illumination ray here.
+        color = color + ComputeGlobalIllumination(ray, mat, w_o, recursionDepth, hitLightMeshId);
+    }
+
+    // SampleDirectLight should be TRUE iff either
+    // 1) NO path tracing
+    // 2) path tracing with NextEventEstimation enabled.
+    bool sampleDirectLight = !rendererParams.pathTracingEnabled 
+                            || (rendererParams.pathTracingEnabled && rendererParams.nextEventEstimationEnabled);
+
+    if(!travellingInsideAnObject && sampleDirectLight)
     {
         color = color + GetAmbient(mat.ambient, scene.ambient_light);
-        if(isnan(color.x) || isnan(color.y) || isnan(color.z)){
-                std::cout<<"nan color!!" << std::endl;
-                exit(1);
-        }
-        // Repeat for each light source.
-        for(int i = 0; i < scene.point_lights.size(); i++)
-        {
-            // Skip all calculation if in shadow, no color "contribution".
-            PointLight& light = scene.point_lights[i];
-            if(IsInShadow(ray, light.position)){
-                continue;
-            }
-            Vec3f w_i = makeUnit(light.position - ray.hitInfo.hitPoint);
-            float distToLight = len(light.position - ray.hitInfo.hitPoint);
-            Vec3f receivedIrradiance = light.intensity / (distToLight * distToLight);
-
-            color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
-        }    
-
-        for(int i = 0; i < scene.areaLights.size(); i++)
-        {
-            AreaLight* areaLight = scene.areaLights[i];
-            Vec3f lightSamplePos = areaLight->GetSample();
-            if(IsInShadow(ray, lightSamplePos)){
-                continue;
-            }
-
-            Vec3f w_i = lightSamplePos - ray.hitInfo.hitPoint;
-            float distToLight = len(w_i);
-            float dSqr = distToLight * distToLight;
-            w_i = w_i / distToLight; // normalize.
-
-            float lCostheta = dot(areaLight->normal, -w_i);
-            if(lCostheta < 0){
-                lCostheta = dot(areaLight->normal, w_i);
-            }
-            Vec3f receivedIrradiance = areaLight->radiance * (areaLight->area * lCostheta / dSqr);
-
-            color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
-        }        
-        for(int i = 0; i < scene.sphericalEnvLights.size(); i++)
-        {
-            SphericalEnvironmentLight* envLight = scene.sphericalEnvLights[i];
-            Vec3f sampleDir = envLight->GetDirection(ray.hitInfo.normal);
-            
-            // TODO: should we cast Shadow ray?
-            // if(IsInShadow(ray, samplePos)){
-            //     continue;
-            // }
-            // TODO: should we cast Shadow ray?
-
-            Vec3f receivedIrradiance = envLight->GetSample(sampleDir);
-            Vec3f w_i = ray.hitInfo.normal;
-            color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
-        }    
-
-        for(int i = 0; i < scene.directionalLights.size(); i++)
-        {
-            DirectionalLight* light = scene.directionalLights[i];
-            if(IsInShadowDirectional(ray, light->dir)){
-                continue;
-            }
-            Vec3f w_i = -(light->dir);
-            color = color + Shade(ray, mat, w_i, w_o, light->radiance);
-        }
-        
-        for(int i = 0; i < scene.spotLights.size(); i++)
-        {
-            SpotLight* light = scene.spotLights[i];
-            if(IsInShadow(ray, light->pos)){
-                continue;
-            }
-            Vec3f w_i = makeUnit(light->pos - ray.hitInfo.hitPoint);
-            Vec3f receivedIrradiance = light->GetIrradiance(ray.hitInfo.hitPoint);
-            color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
-        }
-
-        for(int i = 0; i < scene.meshLights.size(); i++)
-        {
-            MeshLight* light = scene.meshLights[i];
-
-            Vec3f lightSamplePos, lightNormal;
-            double weight;
-            light->getSample(lightSamplePos, lightNormal, weight);
-
-            if(IsInShadow(ray, lightSamplePos)){
-                continue;
-            }     
-            Vec3f w_i = lightSamplePos - ray.hitInfo.hitPoint;
-            float distToLight = len(w_i);
-            float dSqr = distToLight * distToLight;
-            w_i = w_i / distToLight; // normalize.
-            
-            if(isnan(w_i.x) || isnan(w_i.y) || isnan(w_i.z)){
-                std::cout<<"nan w_i!!" << std::endl;
-            }
-            float lCostheta = dot(lightNormal, -w_i);
-            if(lCostheta < 0){
-                lCostheta = dot(lightNormal, w_i);
-            }
-
-            Vec3f rad= light->radiance * weight * 2 * M_PI;
-            color = color + Shade(ray, mat, w_i, w_o, rad);
-
-            if(isnan(color.x) || isnan(color.y) || isnan(color.z))
-            {
-                std::cout<<"nan color!!" << std::endl;
-                exit(1);
-            }
-        }
+        color = color + SampleDirectLighting(ray, mat, w_o, hitLightMeshId);
     }
  
-    if(isnan(color.x) || isnan(color.y) || isnan(color.z)){
-                std::cout<<"nan color!!" << std::endl;
-                exit(1);
-    }
-
     if(mat.type == Material::Mirror)
     {
         // Compute radiance along the ideal reflection ray
@@ -218,33 +124,42 @@ Vec3f Raytracer::PerformShading(Ray& ray, Vec3f& eyePos, int recursionDepth)
         color = color + ComputeConductorFresnelReflection(ray, mat, w_o, recursionDepth);
     }
 
-     if(isnan(color.x) || isnan(color.y) || isnan(color.z)){
-                std::cout<<"nan color!!" << std::endl;
-                exit(1);
-        }
 
-    // send global illumination ray here.
-    color = color + ComputeGlobalIllumination(ray, mat, w_o, recursionDepth);
-
-    if(isnan(color.x) || isnan(color.y) || isnan(color.z)){
-                std::cout<<"nan color!!" << std::endl;
-                exit(1);
-        }
+    if(isnan(color.x) || isnan(color.y) || isnan(color.z))
+    {
+        std::cout<<"nan color!!" << std::endl;
+    }
 
     return color;
 }
-Vec3f Raytracer::ComputeGlobalIllumination(Ray& ray, Material& orgMat, Vec3f& w_o, int recDepth)
+Vec3f Raytracer::ComputeGlobalIllumination(Ray& ray, Material& orgMat, Vec3f& w_o, int recDepth, int& hitMeshLightId)
 { 
-    if(recDepth == 0){
-        return Vec3f{0,0,0}; 
+    if(rendererParams.russianRouletteEnabled){
+        // terminate the ray based on probability & throughput
+        float probTest = GetNormalizedRandom();
+        // float terminationProb = 1 - ray.throughput;
+        float maxThroughput = std::max(ray.throughput.x, std::max(ray.throughput.x, ray.throughput.z));
+        if(probTest > maxThroughput && recDepth <= 0){
+            // the lower the ray throughput, the higher the chance to eliminate it.
+            return Vec3f{0,0,0};
+        }
+        ray.throughput = ray.throughput / maxThroughput;
     }
-
-    float rand1 = GetRandom(); // [0,1]
-    float rand2 = GetRandom(); // [0,1]
+    else if(recDepth <= 0){
+        return Vec3f{0,0,0};
+    }
+    float rand1 = GetNormalizedRandom(); // [0,1]
+    float rand2 = GetNormalizedRandom(); // [0,1]
 
     float phi = 2 * M_PI * rand1;
-    float theta = std::acos(rand2); // uniform
-    // float theta = std::asin(std::sqrt(rand2)); // Importance
+    float theta = 0.0f;
+
+    if(rendererParams.sampleImportance){
+        theta = std::asin(std::sqrt(rand2)); // Importance
+    }
+    else{
+        theta = std::acos(rand2); // uniform
+    }
 
     // construct ONB -> uvw, whetere v is aligned with surface normal at hit point.
     Vec3f u,v;
@@ -265,17 +180,12 @@ Vec3f Raytracer::ComputeGlobalIllumination(Ray& ray, Material& orgMat, Vec3f& w_
     if(globalRay.hitInfo.hasHit)
     {
         Material& mat = scene.materials[globalRay.hitInfo.matId-1];
-        // if(mat.type != Material::Emissive){
-        // do not sample lights, this is an indirect lighting pass.
+        if(mat.type == Material::Emissive){
+            hitMeshLightId = globalRay.hitInfo.hitShape->id;
+        }
+        // Compute the contribution.
         Vec3f transferredLight = PerformShading(globalRay, globalRay.origin, recDepth-1);
-        
-        if(isnan(transferredLight.x) || isnan(transferredLight.y) || isnan(transferredLight.z))
-        {
-            std::cout<<"nan transferredLight!!" << std::endl;
-            return Vec3f{0,0,0};
-        }    
-
-        globalRaysColor = Shade(ray, orgMat, globalRay.dir, w_o, transferredLight) * 2.0f *M_PI;
+        globalRaysColor = Shade(ray, orgMat, globalRay.dir, w_o, transferredLight) * 2.0f * M_PI;
     }
     return globalRaysColor;
 }
@@ -288,20 +198,16 @@ Vec3f Raytracer::Shade(Ray& ray, Material& mat, Vec3f& w_i, Vec3f& w_o, Vec3f& L
         float costheta_i = std::max(0.0f, dot(w_i, ray.hitInfo.normal));
         Vec3f kd = GetDiffuseReflectanceCoeff(ray, s, mat);
         Vec3f ks = GetSpecularReflectanceCoeff(ray, s, mat);
-        Vec3f res =  mat.brdf->apply(mat, kd, ks, w_i, w_o, ray.hitInfo.normal) * Li * costheta_i;
-        if(isnan(res.x) || isnan(res.y) || isnan(res.z))
-        {
-            std::cout<<"nan res!!" << std::endl;
-            return Vec3f{0,0,0};
-        }
-        return res;
+        Vec3f res =  mat.brdf->apply(mat, kd, ks, w_i, w_o, ray.hitInfo.normal);
+        ray.throughput = ray.throughput * res;
+        return res * Li * costheta_i;
     }
     else return GetDiffuse(ray, s, mat, w_i, Li) + GetSpecular(ray, s, mat, w_i, w_o, Li);
 }
 
 Vec3f Raytracer::ComputeConductorFresnelReflection(Ray& originalRay, Material& mat, Vec3f& w_o, int recDepth)
 {
-    if(recDepth == 0){
+    if(recDepth <= 0){
         return Vec3f{0,0,0}; 
     }
 
@@ -354,7 +260,7 @@ Vec3f Raytracer::ComputeConductorFresnelReflection(Ray& originalRay, Material& m
 
 Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Ray& originalRay, Material& mat, Vec3f& w_o, float n1, float n2, int recDepth)
 {
-    if(recDepth == 0){
+    if(recDepth <= 0){
         return Vec3f{0,0,0}; 
     }
 
@@ -462,8 +368,8 @@ Vec3f Raytracer::ComputeDielectricFresnelReflectionAndRefraction(Ray& originalRa
                 Vec3f u,v;
                 GetOrthonormalBasis(w_refracted, u ,v);
 
-                float psi1 = GetRandom();
-                float psi2 = GetRandom();
+            float psi1 = GetNormalizedRandom()- 0.5f;
+            float psi2 = GetNormalizedRandom()- 0.5f;
 
                 w_refracted = makeUnit(w_refracted + (u*psi1 + v*psi2)* mat.roughness);
             }
@@ -523,8 +429,9 @@ Vec3f Raytracer::Reflect(Vec3f& normal, Vec3f& w_o, float roughness)
         Vec3f u,v;
         GetOrthonormalBasis(r, u ,v);
 
-        float psi1 = GetRandom();
-        float psi2 = GetRandom();
+        // generate two random floats in range [-0.5, 0.5]
+        float psi1 = GetNormalizedRandom()- 0.5f;
+        float psi2 = GetNormalizedRandom()- 0.5f;
 
         Vec3f rPrime = makeUnit(r + (u*psi1 + v*psi2)*roughness);
         return rPrime;
@@ -534,7 +441,7 @@ Vec3f Raytracer::Reflect(Vec3f& normal, Vec3f& w_o, float roughness)
 
 Vec3f Raytracer::ComputeMirrorReflection(Ray& originalRay, Material& mat, Vec3f& w_o, int recursionDepth)
 {
-    if (recursionDepth == 0)
+    if (recursionDepth <= 0)
     {
         return Vec3f{0,0,0};
     }
@@ -733,15 +640,7 @@ void Raytracer::IntersectObjects(Ray& ray)
         Shape* s = scene.triangles[i];
         s->Intersect(ray);
     }
-
-    // If missed all objects, Intersect with the Spherical Environment Map (or Skybox)
-    if(!ray.hitInfo.hasHit)
-    {
-
-    }
-
 }
-
 
 Ray Raytracer::GenerateSecondaryRay(Ray& original, Vec3f& newDir, Vec3f& newOrigin)
 {
@@ -754,20 +653,9 @@ Ray Raytracer::GenerateSecondaryRay(Ray& original, Vec3f& newDir, Vec3f& newOrig
 
     // it didnt change medium, reflected back into the one its coming from.
     ray.refractiveIndexOfCurrentMedium = original.refractiveIndexOfCurrentMedium;
-
     ray.motionBlurTime = original.motionBlurTime;
-    // ray.lightSampleX = original.lightSampleX;
-    // ray.lightSampleY = original.lightSampleY;
-    
-    // if(scene.areaLights.size() > 0)
-    // {    
-    //     ray.lightSampleX = GetRandom();
-    //     ray.lightSampleY = GetRandom();
-    // }
-    // else{
-    //     ray.lightSampleX = ray.lightSampleY = 0.0f;
-    // }
-    
+    ray.throughput = original.throughput;
+
     return ray;
 }
 Ray Raytracer::GenerateRay(int i, int j, Camera& cam)
@@ -776,6 +664,7 @@ Ray Raytracer::GenerateRay(int i, int j, Camera& cam)
     Vec3f imagePlanePos = cam.GetImagePlanePosition(i,j);
 
     ray.origin = cam.position;
+    ray.throughput = Vec3f{1.0f, 1.0f, 1.0f};
 
     bool depthOfFieldEnabled = cam.apertureSize > 0.0001;
     if(depthOfFieldEnabled)
@@ -800,23 +689,118 @@ Ray Raytracer::GenerateRay(int i, int j, Camera& cam)
     {
         ray.dir = makeUnit(imagePlanePos - ray.origin);
     }
-
-    // if(scene.areaLights.size() > 0)
-    // {    
-    //     ray.lightSampleX = GetRandom();
-    //     ray.lightSampleY = GetRandom();
-    // }
-    // else{
-    //     ray.lightSampleX = ray.lightSampleY = 0.0f;
-    // }
     
     ray.hitInfo.hasHit = false;
     ray.hitInfo.minT = INFINITY;
     ray.refractiveIndexOfCurrentMedium = 1.0f;
-
-    // ray.motionBlurTime = -999.0f;
-    ray.motionBlurTime = GetRandom() + 0.5f;
-
+    ray.motionBlurTime = GetNormalizedRandom();
     
     return ray;
+}
+
+Vec3f Raytracer::SampleDirectLighting(Ray& ray, Material& mat, Vec3f& w_o, int lightIDToSkip)
+{
+    Vec3f color{0,0,0};
+
+    // Repeat for each light source.
+    for(int i = 0; i < scene.point_lights.size(); i++)
+    {
+        // Skip all calculation if in shadow, no color "contribution".
+        PointLight& light = scene.point_lights[i];
+        if(IsInShadow(ray, light.position)){
+            continue;
+        }
+        Vec3f w_i = makeUnit(light.position - ray.hitInfo.hitPoint);
+        float distToLight = len(light.position - ray.hitInfo.hitPoint);
+        Vec3f receivedIrradiance = light.intensity / (distToLight * distToLight);
+
+        color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
+    }    
+
+    for(int i = 0; i < scene.areaLights.size(); i++)
+    {
+        AreaLight* areaLight = scene.areaLights[i];
+        Vec3f lightSamplePos = areaLight->GetSample();
+        if(IsInShadow(ray, lightSamplePos)){
+            continue;
+        }
+
+        Vec3f w_i = lightSamplePos - ray.hitInfo.hitPoint;
+        float distToLight = len(w_i);
+        float dSqr = distToLight * distToLight;
+        w_i = w_i / distToLight; // normalize.
+
+        float lCostheta = dot(areaLight->normal, -w_i);
+        if(lCostheta < 0){
+            lCostheta = dot(areaLight->normal, w_i);
+        }
+        Vec3f receivedIrradiance = areaLight->radiance * (areaLight->area * lCostheta / dSqr);
+
+        color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
+    }        
+    for(int i = 0; i < scene.sphericalEnvLights.size(); i++)
+    {
+        SphericalEnvironmentLight* envLight = scene.sphericalEnvLights[i];
+        Vec3f sampleDir = envLight->GetDirection(ray.hitInfo.normal);
+        
+        // TODO: should we cast Shadow ray?
+        // if(IsInShadow(ray, samplePos)){
+        //     continue;
+        // }
+        // TODO: should we cast Shadow ray?
+
+        Vec3f receivedIrradiance = envLight->GetSample(sampleDir);
+        Vec3f w_i = ray.hitInfo.normal;
+        color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
+    }    
+
+    for(int i = 0; i < scene.directionalLights.size(); i++)
+    {
+        DirectionalLight* light = scene.directionalLights[i];
+        if(IsInShadowDirectional(ray, light->dir)){
+            continue;
+        }
+        Vec3f w_i = -(light->dir);
+        color = color + Shade(ray, mat, w_i, w_o, light->radiance);
+    }
+    
+    for(int i = 0; i < scene.spotLights.size(); i++)
+    {
+        SpotLight* light = scene.spotLights[i];
+        if(IsInShadow(ray, light->pos)){
+            continue;
+        }
+        Vec3f w_i = makeUnit(light->pos - ray.hitInfo.hitPoint);
+        Vec3f receivedIrradiance = light->GetIrradiance(ray.hitInfo.hitPoint);
+        color = color + Shade(ray, mat, w_i, w_o, receivedIrradiance);
+    }
+
+    for(int i = 0; i < scene.meshLights.size(); i++)
+    {
+        MeshLight* light = scene.meshLights[i];
+        if(light->id == lightIDToSkip) continue;
+
+        Vec3f lightSamplePos, lightNormal;
+        double weight;
+        light->getSample(lightSamplePos, lightNormal, weight);
+
+        if(IsInShadow(ray, lightSamplePos)){
+            continue;
+        }     
+        Vec3f w_i = lightSamplePos - ray.hitInfo.hitPoint;
+        float distToLight = len(w_i);
+        float dSqr = distToLight * distToLight;
+        w_i = w_i / distToLight; // normalize.
+      
+        float lCostheta = dot(lightNormal, -w_i);
+        if(lCostheta < 0){
+            lCostheta = dot(lightNormal, w_i);
+        }
+
+        Vec3f rad= light->radiance * weight * 2 * M_PI;
+        // Vec3f rad =  light->radiance * 2 * M_PI * weight  * light->surfaceArea / dSqr;
+        color = color + Shade(ray, mat, w_i, w_o, rad);
+    }
+
+    return color;
 }

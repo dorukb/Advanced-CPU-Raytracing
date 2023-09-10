@@ -5,6 +5,7 @@
 #include "mesh.hpp"
 #include "scene.h"
 #include <random>
+#include "rendererParams.h"
 
 namespace DorkTracer
 {
@@ -16,11 +17,15 @@ namespace DorkTracer
         Camera* activeCamera;
         Raytracer(Scene& scene);
         Vec3f RenderPixel(int i, int j, Camera& cam);
+        void EnablePathTracing(RendererParams params);
 
     private:
-        
-        std::mt19937 roughnessRandomGenerator;
+        bool pathTracingEnabled = false;
+        RendererParams rendererParams;
+
+        std::mt19937 randGen;
         std::uniform_real_distribution<> roughnessRandomDistro;
+        std::uniform_real_distribution<> normalizedDistro;
 
         std::mt19937 dofLensSampleGenerator;
         std::uniform_real_distribution<> dofLensSampleDistro;
@@ -34,6 +39,7 @@ namespace DorkTracer
         Vec3f GetAmbient(Vec3f& reflectance, Vec3f& ambientLightColor);
         Vec3f GetDiffuse(Ray& ray, Shape* shape, Material& mat, Vec3f& w_i, Vec3f& receivedIrradiance);
         Vec3f GetSpecular(Ray& ray, Shape* shape, Material& mat, Vec3f& w_in, Vec3f& w_out, Vec3f& receivedIrradiance);
+        Vec3f SampleDirectLighting(Ray& ray, Material& mat, Vec3f& w_o, int lightIDToSkip);
 
         bool IsInShadow(Ray& ray, Vec3f& lightPos);
         bool IsInShadowDirectional(Ray& originalRay, Vec3f& dir);
@@ -48,10 +54,10 @@ namespace DorkTracer
 
         Vec3f GetDiffuseReflectanceCoeff(Ray& ray, Shape* shape, Material& mat);
         Vec3f GetSpecularReflectanceCoeff(Ray& ray, Shape* shape, Material& mat);
-        Vec3f ComputeGlobalIllumination(Ray& originalRay,Material& orgMat, Vec3f& w_o, int recDepth);
+        Vec3f ComputeGlobalIllumination(Ray& originalRay,Material& orgMat, Vec3f& w_o, int recDepth, int& hitLightId);
         Vec3f Shade(Ray& ray, Material& mat, Vec3f& w_i, Vec3f& w_o, Vec3f& receivedIrradiance);
 
-        float GetRandom();
+        float GetNormalizedRandom();
         float GetLensSample();
     };
 }
